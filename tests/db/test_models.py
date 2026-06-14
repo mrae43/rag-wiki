@@ -14,7 +14,7 @@ import uuid
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncSession
 
-from ragwiki.db.models import (
+from rag_wiki.db.models import (
     Chunk,
     ChunkEntity,
     Entity,

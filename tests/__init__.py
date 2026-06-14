@@ -1,8 +1,8 @@
 """
 tests
 -----
-Test suite for the ragwiki project.
+Test suite for the rag-wiki project.
 
 Test file mirrors source file structure:
-    ragwiki/graph/extraction.py → tests/graph/test_extraction.py
+    rag_wiki/graph/extraction.py → tests/graph/test_extraction.py
 """

@@ -17,14 +17,14 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-from ragwiki.db.base import Base
-from ragwiki.main import app as fastapi_app
-from ragwiki.providers.base import LLMProvider
-from ragwiki.settings import Settings, get_settings
+from rag_wiki.db.base import Base
+from rag_wiki.main import app as fastapi_app
+from rag_wiki.providers.base import LLMProvider
+from rag_wiki.settings import Settings, get_settings
 
 TEST_DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://ragwiki:ragwiki@localhost:5432/ragwiki_test",
+    "postgresql+asyncpg://rag_wiki:rag_wiki@localhost:5432/rag_wiki_test",
 )
 
 
@@ -87,7 +87,7 @@ async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI test client with DB dependency overridden."""
     # Import lazily to avoid triggering module-level get_settings() before
     # the settings fixture has patched the environment.
-    from ragwiki.db.session import get_db
+    from rag_wiki.db.session import get_db
 
     async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db

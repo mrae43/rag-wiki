@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
-import ragwiki
-from ragwiki.exceptions import (
+import rag_wiki
+from rag_wiki.exceptions import (
     EntityResolutionError,
     IngestError,
     LLMProviderError,
     RagWikiError,
 )
-from ragwiki.main import app as fastapi_app
-from ragwiki.settings import Settings, get_settings
+from rag_wiki.main import app as fastapi_app
+from rag_wiki.settings import Settings, get_settings
 
 
 def test_package_imports() -> None:
-    assert ragwiki.__doc__ is not None
+    assert rag_wiki.__doc__ is not None
 
 
 def test_exception_hierarchy() -> None:
