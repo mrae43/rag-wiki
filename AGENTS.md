@@ -25,9 +25,11 @@ Self-hosted system that builds an LLM-maintained knowledge wiki from documents
 over a Postgres + knowledge graph backend.
 
 - `CONTEXT.md` — terminology (Source, Chunk, Entity, Relation, Wiki, Source of Truth)
+- `docs/llm-wiki.md` — broader context of the project (the LLM Wiki pattern)
 - `docs/adr/` — all architectural decisions and their rationale
 - `docs/tech-stack.md` — concrete library/tool choices
 - `docs/coding-standards.md` — code conventions (read before writing anything)
+- `docs/harness-engineering.md` — broader context for agentic system design principles
 
 ---
 
