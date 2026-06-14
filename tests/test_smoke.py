@@ -1,0 +1,44 @@
+"""Smoke tests for core package-level imports and basic functionality."""
+
+from __future__ import annotations
+
+import ragwiki
+from ragwiki.exceptions import (
+    EntityResolutionError,
+    IngestError,
+    LLMProviderError,
+    RagWikiError,
+)
+from ragwiki.main import app as fastapi_app
+from ragwiki.settings import Settings, get_settings
+
+
+def test_package_imports() -> None:
+    assert ragwiki.__doc__ is not None
+
+
+def test_exception_hierarchy() -> None:
+    assert issubclass(LLMProviderError, RagWikiError)
+    assert issubclass(EntityResolutionError, RagWikiError)
+    assert issubclass(IngestError, RagWikiError)
+    assert LLMProviderError is not RagWikiError
+    assert EntityResolutionError is not RagWikiError
+    assert IngestError is not RagWikiError
+
+
+def test_settings_defaults() -> None:
+    get_settings.cache_clear()
+    settings = get_settings()
+    assert isinstance(settings, Settings)
+    assert settings.llm_provider == "openai"
+    assert settings.embedding_dimensions == 1536
+    assert settings.parser == "lightweight"
+    assert settings.llm_model_caption == "gpt-4o-mini"
+    assert settings.llm_model_extraction == "gpt-4o-mini"
+    assert settings.llm_model_wiki_synthesis == "gpt-4o"
+    assert settings.llm_model_query == "gpt-4o"
+
+
+def test_fastapi_app_creates() -> None:
+    assert fastapi_app.title == "RagWiki"
+    assert fastapi_app is not None
