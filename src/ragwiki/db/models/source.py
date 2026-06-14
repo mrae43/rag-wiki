@@ -66,7 +66,7 @@ class Chunk(Base, UUIDMixin, TimestampMixin):
     )
 
     source_id: Mapped[uuid.UUID] = mapped_column(
-        sa.ForeignKey("sources.id"), nullable=False
+        sa.ForeignKey("sources.id", ondelete="CASCADE"), nullable=False
     )
     chunk_index: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     text_content: Mapped[str] = mapped_column(sa.Text, nullable=False)
