@@ -1,5 +1,5 @@
 """
-ragwiki.providers.openai
+rag_wiki.providers.openai
 ------------------------
 OpenAI implementation of the LLMProvider protocol.
 

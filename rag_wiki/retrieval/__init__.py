@@ -1,5 +1,5 @@
 """
-ragwiki.retrieval
+rag_wiki.retrieval
 -----------------
 Hybrid retrieval pipeline: vector search seed-finding → recursive CTE graph
 traversal → combined context assembly.

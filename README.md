@@ -19,7 +19,7 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 - **Single Postgres backend** — vectors, knowledge graph, job queue, and wiki pages all in one database; no Redis, no Neo4j, no separate vector store
 - **Background job queue** — Postgres-native (`SELECT FOR UPDATE SKIP LOCKED`), durable and restart-safe, with a clear migration path to Celery/RQ
 - **Self-hosted, enterprise-ready** — Docker Compose for small teams, Helm chart for production; single-tenant by design for data sovereignty
-- **Obsidian export** — `ragwiki export` renders wiki pages to a directory of `.md` files for graph-view browsing
+- **Obsidian export** — `rag-wiki export` renders wiki pages to a directory of `.md` files for graph-view browsing
 
 ---
 
@@ -122,7 +122,7 @@ EMBEDDING_DIMENSIONS=1536
 docker compose up
 ```
 
-This starts: PostgreSQL 16 with pgvector, the API server (`ragwiki.main:app`), and the background worker (`ragwiki.worker`).
+This starts: PostgreSQL 16 with pgvector, the API server (`rag_wiki.main:app`), and the background worker (`rag_wiki.worker`).
 
 ### 3. Run database migrations
 
@@ -162,7 +162,7 @@ curl -X POST http://localhost:8000/query \
 ### 6. Export to Obsidian (optional)
 
 ```bash
-docker compose exec api ragwiki export --output ./wiki
+docker compose exec api rag-wiki export --output ./wiki
 ```
 
 Opens cleanly in Obsidian — follow links, browse the graph view.
@@ -184,7 +184,7 @@ uv sync --extra dev
 ruff check .
 ruff format .
 mypy .
-pytest --cov=ragwiki --cov-fail-under=60
+pytest --cov=rag_wiki --cov-fail-under=60
 ```
 
 > **Never mix host and container venvs.** The `Dockerfile` installs the venv at `/opt/venv` so the `docker-compose.yml` bind mount `.:/app` never overwrites it. If `.venv` is root-owned or points to `/usr/local/bin/python3`, it was contaminated by Docker. Delete it and recreate with `uv venv --python /usr/bin/python3`.
@@ -198,7 +198,7 @@ and markdown. For GPU-accelerated full multimodal parsing (tables, images,
 equations as distinct typed chunks):
 
 ```bash
-uv pip install ragwiki[mineru]
+uv pip install rag-wiki[mineru]
 ```
 
 Then set `PARSER=mineru` in `.env`. MinerU is optional — the system runs fully
@@ -221,7 +221,7 @@ A Helm chart is provided for Kubernetes deployment with:
 - Horizontal scaling of workers for high ingestion throughput
 
 ```bash
-helm install ragwiki ./helm/ragwiki -f values.yaml
+helm install rag-wiki ./helm/rag-wiki -f values.yaml
 ```
 
 ---
@@ -229,10 +229,10 @@ helm install ragwiki ./helm/ragwiki -f values.yaml
 ## Project structure
 
 ```
-ragwiki/
+rag_wiki/
   main.py          # FastAPI app
   worker.py        # Background job worker
-  cli.py           # CLI (ragwiki export, ...)
+  cli.py           # CLI (rag-wiki export, ...)
   settings.py      # Pydantic-settings config
   exceptions.py    # Domain exception hierarchy
   providers/       # LLMProvider implementations
@@ -242,7 +242,7 @@ ragwiki/
   wiki/            # Wiki page synthesis and export
   jobs/            # Job queue (enqueue, claim, complete, fail)
   db/              # SQLAlchemy models, session, Alembic
-tests/             # Mirrors ragwiki/ structure
+tests/             # Mirrors rag_wiki/ structure
 docs/
   adr/             # Architecture Decision Records (ADR-0001 to ADR-0010)
   coding-standards.md

@@ -1,5 +1,5 @@
 """
-ragwiki.wiki
+rag_wiki.wiki
 ------------
 Wiki page synthesis and export.
 

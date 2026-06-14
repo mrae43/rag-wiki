@@ -6,7 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.orm import DeclarativeBase
 
-from ragwiki.db.base import Base, TimestampMixin, UUIDMixin
+from rag_wiki.db.base import Base, TimestampMixin, UUIDMixin
 
 
 def test_base_imports() -> None:

@@ -2,7 +2,7 @@ from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from ragwiki.settings import get_settings
+from rag_wiki.settings import get_settings
 
 settings = get_settings()
 

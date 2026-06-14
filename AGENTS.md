@@ -66,18 +66,18 @@ column. No multimodal embeddings, no separate embedding spaces. (ADR-0003)
 
 **Wiki pages live in Postgres** — `wiki_pages` table is the source of truth.
 File export to `.md` files (for Obsidian) is optional and derived, never
-primary storage. CLI: `ragwiki export`. (ADR-0006)
+primary storage. CLI: `rag-wiki export`. (ADR-0006)
 
 **No direct LLM API calls outside the provider abstraction** — all LLM calls
 go through the `LLMProvider` protocol (`complete()`, `embed()`,
 `caption_image()`). Never import `openai` or `anthropic` outside
-`ragwiki/providers/`. Per-operation model selection via env vars:
+`rag_wiki/providers/`. Per-operation model selection via env vars:
 `LLM_MODEL_CAPTION`, `LLM_MODEL_EXTRACTION`, `LLM_MODEL_WIKI_SYNTHESIS`,
 `LLM_MODEL_QUERY`, `EMBEDDING_MODEL`. (ADR-0007)
 
 **Postgres-native job queue** — a `jobs` table with `SELECT FOR UPDATE SKIP
 LOCKED` claiming, behind the interface `enqueue()` / `claim_next()` /
-`complete()` / `fail()`. Not Celery/RQ. Worker: `python -m ragwiki.worker`.
+`complete()` / `fail()`. Not Celery/RQ. Worker: `python -m rag_wiki.worker`.
 The interface is designed so a future Celery/RQ migration is additive, not a
 rewrite. (ADR-0005)
 
@@ -85,7 +85,7 @@ rewrite. (ADR-0005)
 Auth/RBAC is scoped to users within one organization's deployment. (ADR-0004)
 
 **Hybrid parsing pipeline** — lightweight default (pymupdf + unstructured);
-optional MinerU path via `uv pip install ragwiki[mineru]`, feature-flagged. Both
+optional MinerU path via `uv pip install rag-wiki[mineru]`, feature-flagged. Both
 paths produce the same chunk interface. (ADR-0002)
 
 **Hybrid retrieval, single mode for v1** — vector search seeds → recursive CTE
@@ -123,10 +123,10 @@ only, not defer-all-to-batch. (ADR-0008)
 ## Package layout
 
 ```
-ragwiki/
-  main.py              # FastAPI app (entrypoint: ragwiki.main:app)
-  worker.py            # Job worker entrypoint (python -m ragwiki.worker)
-  cli.py               # CLI commands (ragwiki export, ...)
+rag_wiki/
+  main.py              # FastAPI app (entrypoint: rag_wiki.main:app)
+  worker.py            # Job worker entrypoint (python -m rag_wiki.worker)
+  cli.py               # CLI commands (rag-wiki export, ...)
   settings.py          # pydantic-settings config (all env vars)
   exceptions.py        # Domain exception hierarchy rooted in RagWikiError
   providers/           # LLMProvider implementations (openai.py, anthropic.py, base.py)
@@ -145,7 +145,7 @@ tests/
   jobs/
 ```
 
-Test file mirrors source file: `ragwiki/graph/extraction.py` →
+Test file mirrors source file: `rag_wiki/graph/extraction.py` →
 `tests/graph/test_extraction.py`.
 
 ---

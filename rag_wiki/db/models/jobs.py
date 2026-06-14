@@ -1,4 +1,4 @@
-"""ragwiki.db.models.jobs
+"""rag_wiki.db.models.jobs
 ----------------------
 Postgres-native job queue table.
 
@@ -15,7 +15,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ragwiki.db.base import Base, TimestampMixin, UUIDMixin
+from rag_wiki.db.base import Base, TimestampMixin, UUIDMixin
 
 
 class JobStatus(enum.StrEnum):

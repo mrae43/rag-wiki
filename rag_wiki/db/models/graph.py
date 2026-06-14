@@ -1,4 +1,4 @@
-"""ragwiki.db.models.graph
+"""rag_wiki.db.models.graph
 -----------------------
 Knowledge graph entities and relations.
 
@@ -16,12 +16,12 @@ import sqlalchemy as sa
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ragwiki.db.base import Base, TimestampMixin, UUIDMixin
-from ragwiki.settings import get_settings
+from rag_wiki.db.base import Base, TimestampMixin, UUIDMixin
+from rag_wiki.settings import get_settings
 
 if TYPE_CHECKING:
-    from ragwiki.db.models.source import Chunk
-    from ragwiki.db.models.wiki import WikiPage
+    from rag_wiki.db.models.source import Chunk
+    from rag_wiki.db.models.wiki import WikiPage
 
 
 class PublishedStatus(enum.StrEnum):

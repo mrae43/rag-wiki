@@ -1,4 +1,4 @@
-"""ragwiki.db.models.source
+"""rag_wiki.db.models.source
 ------------------------
 Source, chunk, and chunk-to-entity join models.
 
@@ -17,11 +17,11 @@ import sqlalchemy as sa
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ragwiki.db.base import Base, TimestampMixin, UUIDMixin
-from ragwiki.settings import get_settings
+from rag_wiki.db.base import Base, TimestampMixin, UUIDMixin
+from rag_wiki.settings import get_settings
 
 if TYPE_CHECKING:
-    from ragwiki.db.models.graph import Entity
+    from rag_wiki.db.models.graph import Entity
 
 
 class ProcessingStatus(enum.StrEnum):

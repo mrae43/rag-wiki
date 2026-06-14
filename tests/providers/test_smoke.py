@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ragwiki.providers.base import LLMProvider
+from rag_wiki.providers.base import LLMProvider
 
 
 def test_llm_provider_protocol_methods() -> None:

@@ -15,7 +15,7 @@ explaining what this module does and what it does NOT do (scope boundary).
 
 ```python
 """
-ragwiki.graph.extraction
+rag_wiki.graph.extraction
 ------------------------
 Extracts entities and relations from a chunk of text using the configured
 LLM provider. Does NOT perform entity resolution or write to the database —
@@ -33,7 +33,7 @@ class LLMProvider(Protocol):
     Protocol defining the LLM operations the system needs.
 
     All LLM calls in this codebase go through an implementation of this
-    protocol. Concrete implementations live in ragwiki.providers.*
+    protocol. Concrete implementations live in rag_wiki.providers.*
     Callers depend on this interface, never on a concrete implementation.
     """
 ```
@@ -113,9 +113,9 @@ Each sub-package has its own exception hierarchy rooted in a base exception.
 Never raise bare `Exception` or `RuntimeError` from domain code.
 
 ```python
-# ragwiki/exceptions.py
+# rag_wiki/exceptions.py
 class RagWikiError(Exception):
-    """Base exception for all ragwiki errors."""
+    """Base exception for all rag-wiki errors."""
 
 class LLMProviderError(RagWikiError):
     """Raised when an LLM provider call fails after retries."""
@@ -253,8 +253,8 @@ from uuid import UUID
 import sqlalchemy as sa
 from pydantic import BaseModel
 
-from ragwiki.db.models import Entity
-from ragwiki.providers.base import LLMProvider
+from rag_wiki.db.models import Entity
+from rag_wiki.providers.base import LLMProvider
 ```
 
 ### 4.5 Naming
@@ -369,8 +369,8 @@ transaction. Do not rely on autocommit behavior.
 
 ### 8.1 Test file mirrors source structure
 ```
-ragwiki/graph/extraction.py     →  tests/graph/test_extraction.py
-ragwiki/providers/openai.py     →  tests/providers/test_openai.py
+rag_wiki/graph/extraction.py     →  tests/graph/test_extraction.py
+rag_wiki/providers/openai.py     →  tests/providers/test_openai.py
 ```
 
 ### 8.2 One assertion concept per test

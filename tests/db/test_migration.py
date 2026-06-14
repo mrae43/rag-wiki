@@ -19,8 +19,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from alembic import command
-from ragwiki.db import Base
-from ragwiki.settings import get_settings
+from rag_wiki.db import Base
+from rag_wiki.settings import get_settings
 
 # Tables expected after the migration is applied.
 _EXPECTED_TABLES = [

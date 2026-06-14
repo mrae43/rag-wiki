@@ -13,9 +13,9 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: ragwiki
-          POSTGRES_PASSWORD: ragwiki
-          POSTGRES_DB: ragwiki_test
+          POSTGRES_USER: rag_wiki
+          POSTGRES_PASSWORD: rag_wiki
+          POSTGRES_DB: rag_wiki_test
         ports: ["5432:5432"]
         options: >-
           --health-cmd pg_isready
@@ -33,9 +33,9 @@ jobs:
       - run: ruff check --output-format=github .
       - run: ruff format --check .
       - run: mypy .
-      - run: pytest --cov=ragwiki --cov-report=xml --cov-fail-under=60 --junitxml=results/test-results.xml
+      - run: pytest --cov=rag_wiki --cov-report=xml --cov-fail-under=60 --junitxml=results/test-results.xml
         env:
-          DATABASE_URL: postgresql+asyncpg://ragwiki:ragwiki@localhost:5432/ragwiki_test
+          DATABASE_URL: postgresql+asyncpg://rag_wiki:rag_wiki@localhost:5432/rag_wiki_test
 
       - uses: actions/upload-artifact@v4
         if: always()
