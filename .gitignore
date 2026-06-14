@@ -110,6 +110,9 @@ desktop.ini
 .env.*
 !.env.example
 
+# pgAdmin server config (keep servers.example.json tracked)
+pgadmin/servers.json
+
 # Local secrets
 secrets/
 *.pem
