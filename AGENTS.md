@@ -165,6 +165,14 @@ All four must pass before considering a task done.
 
 ---
 
+## Migrations
+
+Always auto-generate migrations with `alembic revision --autogenerate` — never
+hand-write migration files. Run from inside Docker so the tool can inspect the
+live schema. See [README.md](README.md) for the full workflow.
+
+---
+
 ## Local development
 
 See [README.md#local-development-without-docker](README.md#local-development-without-docker) for host venv setup and quality commands.

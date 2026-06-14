@@ -10,6 +10,7 @@ removed accordingly.
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import pytest
 from alembic.config import Config
@@ -65,7 +66,8 @@ async def _index_exists(conn: AsyncConnection, index_name: str) -> bool:
 
 
 def _alembic_cfg() -> Config:
-    cfg = Config("alembic.ini")
+    root = Path(__file__).resolve().parent.parent.parent
+    cfg = Config(str(root / "alembic.ini"))
     cfg.set_main_option("sqlalchemy.url", get_settings().database_url)
     return cfg
 
@@ -146,6 +148,19 @@ async def test_downgrade_removes_all_tables(
             assert not await _table_exists(conn, table), msg
 
 
+async def _column_default(conn: AsyncConnection, table: str, column: str) -> str | None:
+    result = await conn.execute(
+        text(
+            "SELECT column_default FROM information_schema.columns "
+            "WHERE table_schema = 'public' "
+            "AND table_name = :table AND column_name = :column"
+        ),
+        {"table": table, "column": column},
+    )
+    row = result.fetchone()
+    return row[0] if row else None
+
+
 async def test_downgrade_removes_hnsw_indexes(
     migration_engine: AsyncEngine,
 ) -> None:
@@ -155,3 +170,24 @@ async def test_downgrade_removes_hnsw_indexes(
         for idx in _EXPECTED_HNSW_INDEXES:
             msg = f"index {idx} still exists after downgrade"
             assert not await _index_exists(conn, idx), msg
+
+
+async def test_upgrade_sets_status_defaults(migration_engine: AsyncEngine) -> None:
+    """After Alembic upgrade, every status column must have a server-side default."""
+    await _run_upgrade(migration_engine)
+    async with migration_engine.connect() as conn:
+        defaults = [
+            ("sources", "status", "pending"),
+            ("chunks", "status", "pending"),
+            ("entities", "status", "published"),
+            ("relations", "status", "published"),
+            ("wiki_pages", "status", "published"),
+            ("jobs", "status", "pending"),
+        ]
+        for table, column, expected in defaults:
+            default = await _column_default(conn, table, column)
+            msg = f"{table}.{column} missing default after upgrade"
+            assert default is not None, msg
+            assert expected in default, (
+                f"{table}.{column} default={default!r} missing {expected!r}"
+            )
