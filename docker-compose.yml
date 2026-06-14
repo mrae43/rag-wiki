@@ -18,7 +18,7 @@ services:
   api:
     build: .
     entrypoint: ["/app/docker-entrypoint.sh"]
-    command: uv run uvicorn ragwiki.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uv run uvicorn rag_wiki.main:app --host 0.0.0.0 --port 8000 --reload
     env_file: .env
     ports:
       - "8000:8000"
@@ -31,7 +31,7 @@ services:
   worker:
     build: .
     entrypoint: ["/app/docker-entrypoint.sh"]
-    command: uv run python -m ragwiki.worker
+    command: uv run python -m rag_wiki.worker
     env_file: .env
     volumes:
       - .:/app

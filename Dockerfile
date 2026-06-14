@@ -17,7 +17,6 @@ ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 COPY pyproject.toml uv.lock ./
-RUN mkdir -p src/ragwiki && touch src/ragwiki/__init__.py
 RUN uv sync --frozen --no-cache
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
@@ -26,6 +25,6 @@ RUN chmod +x /app/docker-entrypoint.sh
 COPY . .
 
 # Default command (overridden per-service in compose)
-CMD ["uv", "run", "uvicorn", "ragwiki.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "rag_wiki.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
