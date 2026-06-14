@@ -12,6 +12,10 @@ RUN apt-get update && apt-get install -y \
     tesseract-ocr \
     && rm -rf /var/lib/apt/lists/*
 
+# Isolate the venv so the .:/app bind mount never overwrites it
+ENV VIRTUAL_ENV=/opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
 COPY pyproject.toml uv.lock ./
 RUN mkdir -p src/ragwiki && touch src/ragwiki/__init__.py
 RUN uv sync --frozen --no-cache
