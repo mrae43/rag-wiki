@@ -259,7 +259,7 @@ CONTEXT.md         # Domain terminology glossary
 |---|---|
 | ✅ Done | Architecture decisions (10 ADRs) |
 | ✅ Done | Coding standards, tech stack, agent guidance |
-| 🔲 Next | Database schema + Alembic migrations |
+| ✅ Done | Database schema + Alembic migrations |
 | 🔲 Next | Lightweight parsing pipeline |
 | 🔲 Next | LLM provider abstraction + OpenAI/Anthropic implementations |
 | 🔲 Next | Entity/relation extraction + real-time resolution |
