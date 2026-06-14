@@ -126,9 +126,21 @@ This starts: PostgreSQL 16 with pgvector, the API server (`ragwiki.main:app`), a
 
 ### 3. Run database migrations
 
+Migrations run automatically on container start via `docker-entrypoint.sh`. You
+can also run them manually:
+
 ```bash
 docker compose exec api alembic upgrade head
 ```
+
+**Creating new migrations** — after changing SQLAlchemy models, auto-generate a
+migration from inside Docker (so the tool can inspect the live schema):
+
+```bash
+docker compose run --rm api uv run alembic revision --autogenerate -m "describe your change"
+```
+
+Review the generated file in `alembic/versions/` before committing. Never hand-write migration files.
 
 ### 4. Ingest a document
 
