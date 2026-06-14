@@ -1,0 +1,176 @@
+# =============================================================================
+# Python
+# =============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# Cython debug symbols
+cython_debug/
+
+# =============================================================================
+# Virtual Environments
+# =============================================================================
+
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# =============================================================================
+# IDEs & Editors
+# =============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm / IntelliJ
+.idea/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+\#*\#
+.*~
+
+# =============================================================================
+# OS
+# =============================================================================
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =============================================================================
+# Environment & Secrets
+# =============================================================================
+
+# Environment variables (keep .env.example tracked)
+.env
+.env.*
+!.env.example
+
+# Local secrets
+secrets/
+*.pem
+*.key
+
+# =============================================================================
+# Project-specific: RAG Wiki
+# =============================================================================
+
+# Local data directories
+postgres_data/
+data/
+*.db
+*.sqlite3
+
+# Alembic local config (if it contains DB credentials)
+alembic.ini
+
+# Docker Compose local overrides
+docker-compose.override.yml
+
+# Local Docker volumes
+.docker/
+
+# Helm generated artifacts
+charts/*.tgz
+
+# Exported wiki files (derived, not source of truth per ADR-0006)
+exports/
+wiki_export/
+*.md.export
+
+# Logs
+logs/
+*.log
+
+# Local development scratch space
+local/
+tmp/
+temp/
+*.tmp
+
+# Uploaded / ingested documents (if stored locally)
+uploads/
+ingest/
+
+# =============================================================================
+# Node (if any frontend assets are added later)
+# =============================================================================
+
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# =============================================================================
+# Build / CI artifacts
+# =============================================================================
+
+dist/
+build/
+*.tar.gz
+*.zip
