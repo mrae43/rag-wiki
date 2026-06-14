@@ -157,6 +157,28 @@ Opens cleanly in Obsidian — follow links, browse the graph view.
 
 ---
 
+## Local development (without Docker)
+
+If you want to run the code directly on your host (e.g. for faster iteration or IDE debugging):
+
+```bash
+# 1. Create the venv with the host Python
+uv venv --python /usr/bin/python3
+
+# 2. Install all dependencies including dev tools
+uv sync --extra dev
+
+# 3. Run the quality gate
+ruff check .
+ruff format .
+mypy .
+pytest --cov=ragwiki --cov-fail-under=60
+```
+
+> **Never mix host and container venvs.** The `Dockerfile` installs the venv at `/opt/venv` so the `docker-compose.yml` bind mount `.:/app` never overwrites it. If `.venv` is root-owned or points to `/usr/local/bin/python3`, it was contaminated by Docker. Delete it and recreate with `uv venv --python /usr/bin/python3`.
+
+---
+
 ## Optional: full multimodal parsing (MinerU)
 
 By default, the lightweight parser (PyMuPDF + unstructured) handles PDFs, DOCX,

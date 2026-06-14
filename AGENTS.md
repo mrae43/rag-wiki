@@ -12,6 +12,7 @@ Read these files first, every session, in this order:
 1. `CONTEXT.md` — domain terminology. Use these terms exactly; do not invent synonyms.
 2. `docs/coding-standards.md` — docstrings, error handling, typing, logging, DB conventions. Non-negotiable.
 3. The ADR(s) relevant to the subsystem you are touching (see `docs/adr/`). If you are unsure which ADR applies, read `docs/adr/` index below.
+4. `docs/harness-engineering.md` — harness design principles for agent workflows (16-step blueprint).
 
 If a task is ambiguous and no ADR covers it, **stop and ask** rather than
 inventing a solution that may conflict with a decision already made elsewhere.
@@ -159,6 +160,12 @@ pytest tests/graph/   # specific module
 
 Run in order: `ruff check` → `ruff format` → `mypy` → `pytest`.
 All four must pass before considering a task done.
+
+---
+
+## Local development
+
+See [README.md#local-development-without-docker](README.md#local-development-without-docker) for host venv setup and quality commands.
 
 ---
 
