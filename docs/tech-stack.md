@@ -42,7 +42,7 @@ decisions requiring justification.
   - Markdown read directly (for Obsidian-clipped sources, per the original LLM
     Wiki doc's tooling tips)
 - **Optional MinerU path**: feature-flagged, separate optional dependency group
-  (e.g. `pip install ragwiki[mineru]`), isolated behind the same chunk-producing
+  (e.g. `uv pip install ragwiki[mineru]`), isolated behind the same chunk-producing
   interface as the lightweight path so downstream code doesn't differ by path.
 
 ## LLM provider abstraction (ADR-0007)

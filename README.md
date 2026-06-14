@@ -164,7 +164,7 @@ and markdown. For GPU-accelerated full multimodal parsing (tables, images,
 equations as distinct typed chunks):
 
 ```bash
-pip install ragwiki[mineru]
+uv pip install ragwiki[mineru]
 ```
 
 Then set `PARSER=mineru` in `.env`. MinerU is optional — the system runs fully

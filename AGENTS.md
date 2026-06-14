@@ -82,7 +82,7 @@ rewrite. (ADR-0005)
 Auth/RBAC is scoped to users within one organization's deployment. (ADR-0004)
 
 **Hybrid parsing pipeline** — lightweight default (pymupdf + unstructured);
-optional MinerU path via `pip install ragwiki[mineru]`, feature-flagged. Both
+optional MinerU path via `uv pip install ragwiki[mineru]`, feature-flagged. Both
 paths produce the same chunk interface. (ADR-0002)
 
 **Hybrid retrieval, single mode for v1** — vector search seeds → recursive CTE
