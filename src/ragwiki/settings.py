@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
 
+    # pgvector HNSW index settings
+    hnsw_m: int = 24
+    hnsw_ef_construction: int = 200
+
     # Parser
     parser: Literal["lightweight", "mineru"] = "lightweight"
 
