@@ -3,9 +3,11 @@ from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from alembic import context
+from ragwiki.db import Base
+from ragwiki.settings import get_settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,14 +20,14 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+
+settings = get_settings()
 
 
 def run_migrations_offline() -> None:
@@ -40,7 +42,8 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config.get_main_option("sqlalchemy.url")
+    # Offline mode uses a sync driver; swap asyncpg for psycopg2.
+    url = settings.database_url.replace("postgresql+asyncpg://", "postgresql://")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -64,10 +67,8 @@ async def run_async_migrations() -> None:
     and associate a connection with the context.
 
     """
-
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_async_engine(
+        settings.database_url,
         poolclass=pool.NullPool,
     )
 
