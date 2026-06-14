@@ -44,6 +44,7 @@ ragwiki = "ragwiki.cli:app"
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+exclude = ["alembic/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
