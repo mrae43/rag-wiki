@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from ragwiki.settings import get_settings
@@ -18,7 +20,7 @@ AsyncSessionFactory = async_sessionmaker(
 )
 
 
-async def get_db() -> AsyncSession:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency — yields a session, rolls back on error."""
     async with AsyncSessionFactory() as session:
         try:
