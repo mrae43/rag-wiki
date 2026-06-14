@@ -32,7 +32,7 @@ decisions requiring justification.
   `enqueue()`/`claim_next()`/`complete()`/`fail()` interface (per ADR-0005's
   consequences) — written to be swappable for Celery/RQ + Redis later without
   changing pipeline code.
-- A simple worker entrypoint (`python -m ragwiki.worker`) that polls and
+- A simple worker entrypoint (`python -m rag_wiki.worker`) that polls and
   executes jobs; can be run as a separate container/process from the API.
 
 ## Document parsing (ADR-0002)
@@ -42,7 +42,7 @@ decisions requiring justification.
   - Markdown read directly (for Obsidian-clipped sources, per the original LLM
     Wiki doc's tooling tips)
 - **Optional MinerU path**: feature-flagged, separate optional dependency group
-  (e.g. `uv pip install ragwiki[mineru]`), isolated behind the same chunk-producing
+  (e.g. `uv pip install rag-wiki[mineru]`), isolated behind the same chunk-producing
   interface as the lightweight path so downstream code doesn't differ by path.
 
 ## LLM provider abstraction (ADR-0007)
@@ -71,7 +71,7 @@ decisions requiring justification.
   in a `.env.example`.
 
 ## Wiki file export (ADR-0006)
-- A `ragwiki export` CLI command renders `wiki_pages` rows to a directory of
+- A `rag-wiki export` CLI command renders `wiki_pages` rows to a directory of
   `.md` files (optionally with a git commit), for users who want the
   Obsidian/graph-view workflow from the original LLM Wiki pattern.
 
