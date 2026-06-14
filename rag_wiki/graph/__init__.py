@@ -1,5 +1,5 @@
 """
-ragwiki.graph
+rag_wiki.graph
 -------------
 Entity/relation extraction, resolution, and graph traversal queries.
 

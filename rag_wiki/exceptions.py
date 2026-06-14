@@ -1,5 +1,5 @@
 """
-ragwiki.exceptions
+rag_wiki.exceptions
 ------------------
 Domain exception hierarchy rooted in RagWikiError.
 
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 
 class RagWikiError(Exception):
-    """Base exception for all ragwiki errors."""
+    """Base exception for all rag-wiki errors."""
 
 
 class LLMProviderError(RagWikiError):

@@ -1,5 +1,5 @@
 """
-ragwiki.providers.anthropic
+rag_wiki.providers.anthropic
 ---------------------------
 Anthropic implementation of the LLMProvider protocol.
 

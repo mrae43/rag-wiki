@@ -1,10 +1,10 @@
 """
-ragwiki.providers.base
+rag_wiki.providers.base
 ----------------------
 Protocol defining the LLM operations the system needs.
 
 All LLM calls in this codebase go through an implementation of this protocol.
-Concrete implementations live in ragwiki.providers.*. Callers depend on this
+Concrete implementations live in rag_wiki.providers.*. Callers depend on this
 interface, never on a concrete implementation.
 """
 
@@ -18,7 +18,7 @@ class LLMProvider(Protocol):
     Protocol defining the LLM operations the system needs.
 
     All LLM calls in this codebase go through an implementation of this
-    protocol. Concrete implementations live in ragwiki.providers.*
+    protocol. Concrete implementations live in rag_wiki.providers.*
     Callers depend on this interface, never on a concrete implementation.
     """
 
