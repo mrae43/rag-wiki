@@ -67,7 +67,8 @@ async def _index_exists(conn: AsyncConnection, index_name: str) -> bool:
 
 def _alembic_cfg() -> Config:
     root = Path(__file__).resolve().parent.parent.parent
-    cfg = Config(str(root / "alembic.ini"))
+    cfg = Config()
+    cfg.set_main_option("script_location", str(root / "alembic"))
     cfg.set_main_option("sqlalchemy.url", get_settings().database_url)
     return cfg
 
