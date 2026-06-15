@@ -41,12 +41,12 @@ def parse_document(
         return parse_pdf(file_path)
 
     if engine == "ocr":
-        from rag_wiki.ingest.parsers.pdf import _try_ocr
-
         try:
             import fitz
+
+            from rag_wiki.ingest.parsers.pdf import _try_ocr
         except ImportError:
-            raise ParseError("PyMuPDF (fitz) is required for OCR parsing")
+            raise ParseError("PyMuPDF (fitz) is required for OCR parsing") from None
         doc = fitz.open(file_path)
         chunks: list[ParsedChunk] = []
         for page_num in range(len(doc)):
