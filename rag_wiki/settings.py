@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     llm_model_query: str = "gpt-4o"
 
     # Embeddings
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
+    embedding_model: str = "gemini-embedding-2"
+    embedding_dimensions: int = 3072
 
     # pgvector HNSW index settings
     hnsw_m: int = 24
