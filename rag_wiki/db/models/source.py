@@ -58,7 +58,7 @@ class Source(Base, UUIDMixin, TimestampMixin):
 
 
 class Chunk(Base, UUIDMixin, TimestampMixin):
-    """Atomic text unit extracted from a source, with embedding."""
+    """Atomic text/image/table unit extracted from a source, with embedding."""
 
     __tablename__ = "chunks"
     __table_args__ = (
@@ -69,9 +69,17 @@ class Chunk(Base, UUIDMixin, TimestampMixin):
         sa.ForeignKey("sources.id", ondelete="CASCADE"), nullable=False
     )
     chunk_index: Mapped[int] = mapped_column(sa.Integer, nullable=False)
-    text_content: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    chunk_type: Mapped[str] = mapped_column(
+        sa.Text, nullable=False, default="text", server_default="text"
+    )
+    text_content: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(
         Vector(get_settings().embedding_dimensions), nullable=True
+    )
+    image_url: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    image_mime_type: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
+    metadata_: Mapped[dict[str, object] | None] = mapped_column(
+        sa.dialects.postgresql.JSONB, nullable=True
     )
     status: Mapped[str] = mapped_column(
         sa.Text,
