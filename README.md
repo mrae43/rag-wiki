@@ -236,12 +236,19 @@ rag_wiki/
   settings.py      # Pydantic-settings config
   exceptions.py    # Domain exception hierarchy
   providers/       # LLMProvider implementations
-  ingest/          # Parse → extract → resolve → embed pipeline
+  ingest/
+    parser.py      # MIME-based routing into parsing backends
+    chunking.py    # Chunk splitting with configurable overlap
+    schemas.py     # ParsedChunk discriminated union
+    parsers/       # pdf.py, simple.py, unstructured.py
   graph/           # Entity/relation extraction, resolution, traversal
   retrieval/       # Hybrid retrieval (seed, traverse, assemble)
   wiki/            # Wiki page synthesis and export
   jobs/            # Job queue (enqueue, claim, complete, fail)
-  db/              # SQLAlchemy models, session, Alembic
+  db/
+    models/        # graph.py, wiki.py, jobs.py, chunk.py, source.py
+    session.py     # Async session factory
+    base.py        # Declarative base
 tests/             # Mirrors rag_wiki/ structure
 docs/
   adr/             # Architecture Decision Records (ADR-0001 to ADR-0010)
@@ -260,13 +267,13 @@ CONTEXT.md         # Domain terminology glossary
 | ✅ Done | Architecture decisions (10 ADRs) |
 | ✅ Done | Coding standards, tech stack, agent guidance |
 | ✅ Done | Database schema + Alembic migrations |
-| 🔲 Next | Lightweight parsing pipeline |
+| ✅ Done | Lightweight parsing pipeline |
+| ✅ Done | Docker Compose stack |
 | 🔲 Next | LLM provider abstraction + OpenAI/Anthropic implementations |
 | 🔲 Next | Entity/relation extraction + real-time resolution |
 | 🔲 Next | Wiki page synthesis |
 | 🔲 Next | Hybrid retrieval |
 | 🔲 Next | FastAPI endpoints + background worker |
-| 🔲 Next | Docker Compose stack |
 | 🔲 Planned | Auth / RBAC |
 | 🔲 Planned | Observability (structured logging, metrics) |
 | 🔲 Planned | Lint operation (periodic graph health check) |
