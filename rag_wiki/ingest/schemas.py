@@ -14,7 +14,7 @@ class ChunkType(enum.StrEnum):
 
 class BaseChunk(BaseModel):
     doc_id: str
-    chunk_type: str
+    chunk_type: ChunkType
     page_number: int | None = None
     source_filename: str | None = None
     metadata: dict[str, Any] = {}
