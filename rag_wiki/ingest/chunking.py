@@ -15,6 +15,7 @@ def _split_paragraph(text: str) -> list[str]:
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     return paragraphs if paragraphs else [text]
 
+
 def split_by_sections(
     sections: Sequence[tuple[str, int | None]],
     max_chars: int = MAX_CHARS,
