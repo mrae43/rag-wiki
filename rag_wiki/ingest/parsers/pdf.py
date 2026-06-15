@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Generator
 
 import fitz
 
-from rag_wiki.ingest.chunking import MAX_CHARS, OVERLAP_CHARS, split_by_sections
-from rag_wiki.ingest.schemas import ChunkType, ImageChunk, ParsedChunk, TableChunk, TextChunk
+from rag_wiki.ingest.chunking import split_by_sections
+from rag_wiki.ingest.schemas import (
+    ImageChunk,
+    ParsedChunk,
+    TableChunk,
+    TextChunk,
+)
 
 OCR_TEXT_THRESHOLD = 50
 
 
 def _detect_body_font_size(page: fitz.Page) -> float:
-    blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE).get("blocks", [])
+    blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE).get(
+        "blocks", []
+    )
     sizes: list[float] = []
     for block in blocks:
         if block.get("type") == 0:
@@ -27,9 +33,13 @@ def _detect_body_font_size(page: fitz.Page) -> float:
     return sorted_sizes[mid]
 
 
-def _page_heading_sections(page: fitz.Page, body_size: float) -> list[str]:
-    blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE).get("blocks", [])
-    sections: list[str] = []
+def _page_heading_sections(
+    page: fitz.Page, page_num: int, body_size: float
+) -> list[tuple[str, int]]:
+    blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE).get(
+        "blocks", []
+    )
+    sections: list[tuple[str, int]] = []
     current_lines: list[str] = []
 
     for block in blocks:
@@ -44,19 +54,21 @@ def _page_heading_sections(page: fitz.Page, body_size: float) -> list[str]:
 
             if max_span_size >= body_size * 1.5 and text.strip():
                 if current_lines:
-                    sections.append("\n".join(current_lines))
+                    sections.append(("\n".join(current_lines), page_num))
                     current_lines = []
                 current_lines.append(text.strip())
             else:
                 current_lines.append(text.strip())
 
     if current_lines:
-        sections.append("\n".join(current_lines))
+        sections.append(("\n".join(current_lines), page_num))
 
     return sections
 
 
-def _extract_table_chunks(page: fitz.Page, page_num: int, file_name: str, doc_id_prefix: str) -> list[TableChunk]:
+def _extract_table_chunks(
+    page: fitz.Page, page_num: int, file_name: str, doc_id_prefix: str
+) -> list[TableChunk]:
     tables = page.find_tables()
     chunks: list[TableChunk] = []
     for idx, table in enumerate(tables):
@@ -75,7 +87,9 @@ def _extract_table_chunks(page: fitz.Page, page_num: int, file_name: str, doc_id
     return chunks
 
 
-def _extract_image_chunks(page: fitz.Page, page_num: int, file_name: str, doc_id_prefix: str) -> list[ImageChunk]:
+def _extract_image_chunks(
+    page: fitz.Page, page_num: int, file_name: str, doc_id_prefix: str
+) -> list[ImageChunk]:
     chunks: list[ImageChunk] = []
     for idx, img_info in enumerate(page.get_images(full=True)):
         xref = img_info[0]
@@ -119,7 +133,7 @@ def parse_pdf(file_path: str) -> list[ParsedChunk]:
     doc_id_prefix = f"pdf:{file_path}"
 
     chunks: list[ParsedChunk] = []
-    full_text_pages: list[str] = []
+    all_sections: list[tuple[str, int]] = []
 
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
@@ -138,31 +152,26 @@ def parse_pdf(file_path: str) -> list[ParsedChunk]:
         chunks.extend(image_chunks)
 
         if not used_ocr:
-            table_chunks = _extract_table_chunks(page, page_num, file_name, doc_id_prefix)
+            table_chunks = _extract_table_chunks(
+                page, page_num, file_name, doc_id_prefix
+            )
             chunks.extend(table_chunks)
 
-        full_text_pages.append(text or "")
+        sections = _page_heading_sections(page, page_num, body_size)
+        if sections:
+            all_sections.extend(sections)
+        elif text.strip():
+            all_sections.append((text.strip(), page_num))
 
-    if any(t.strip() for t in full_text_pages):
-        all_sections: list[str] = []
-        for page_num in range(len(doc)):
-            page = doc.load_page(page_num)
-            body_size = _detect_body_font_size(page)
-            sections = _page_heading_sections(page, body_size)
-            if not sections:
-                full = full_text_pages[page_num]
-                if full.strip():
-                    all_sections.append(full)
-            else:
-                all_sections.extend(sections)
-
+    if all_sections:
         chunked = split_by_sections(all_sections)
-        for idx, (section_text, section_heading) in enumerate(chunked):
+        for idx, (section_text, section_heading, text_page_num) in enumerate(chunked):
             chunks.append(
                 TextChunk(
                     doc_id=f"{doc_id_prefix}:text:{idx}",
                     text_content=section_text,
                     source_filename=file_name,
+                    page_number=text_page_num,
                     metadata={"section_heading": section_heading or ""},
                 )
             )

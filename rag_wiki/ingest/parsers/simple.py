@@ -59,7 +59,7 @@ def _detect_sections_md(text: str) -> list[str]:
 
 
 def parse_simple(file_path: str) -> list[ParsedChunk]:
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, encoding="utf-8", errors="replace") as f:
         text = f.read()
 
     ext = os.path.splitext(file_path)[1].lower()
@@ -68,9 +68,9 @@ def parse_simple(file_path: str) -> list[ParsedChunk]:
     else:
         raw_sections = _detect_sections_txt(text)
 
-    chunked = split_by_sections(raw_sections)
+    chunked = split_by_sections([(s, None) for s in raw_sections])
     chunks: list[ParsedChunk] = []
-    for idx, (section_text, section_heading) in enumerate(chunked):
+    for idx, (section_text, section_heading, _) in enumerate(chunked):
         chunks.append(
             TextChunk(
                 doc_id=f"simple:{file_path}:{idx}",

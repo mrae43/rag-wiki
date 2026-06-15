@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import enum
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
 
-class ChunkType(str, enum.Enum):
+class ChunkType(enum.StrEnum):
     TEXT = "text"
     TABLE = "table"
     IMAGE = "image"
@@ -14,7 +14,7 @@ class ChunkType(str, enum.Enum):
 
 class BaseChunk(BaseModel):
     doc_id: str
-    chunk_type: str
+    chunk_type: ChunkType
     page_number: int | None = None
     source_filename: str | None = None
     metadata: dict[str, Any] = {}
@@ -39,6 +39,6 @@ class ImageChunk(BaseChunk):
 
 
 ParsedChunk = Annotated[
-    Union[TextChunk, TableChunk, ImageChunk],
+    TextChunk | TableChunk | ImageChunk,
     Field(discriminator="chunk_type"),
 ]

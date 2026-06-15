@@ -13,7 +13,7 @@ def parse_unstructured(file_path: str) -> list[ParsedChunk]:
         raise ImportError(
             "unstructured library is required for DOCX/HTML parsing. "
             "Install it with: pip install unstructured"
-        )
+        ) from None
 
     elements = partition(filename=file_path)
     file_name = os.path.basename(file_path)
@@ -50,7 +50,9 @@ def parse_unstructured(file_path: str) -> list[ParsedChunk]:
             if current_section_lines:
                 sections.append("\n".join(current_section_lines))
                 current_section_lines = []
-            image_data = getattr(element, "image_data", None) or getattr(element, "bytes", None)
+            image_data = getattr(element, "image_data", None) or getattr(
+                element, "bytes", None
+            )
             if image_data:
                 chunks.append(
                     ImageChunk(
@@ -67,8 +69,8 @@ def parse_unstructured(file_path: str) -> list[ParsedChunk]:
     if current_section_lines:
         sections.append("\n".join(current_section_lines))
 
-    chunked = split_by_sections(sections)
-    for idx, (section_text, section_heading) in enumerate(chunked):
+    chunked = split_by_sections([(s, None) for s in sections])
+    for idx, (section_text, section_heading, _) in enumerate(chunked):
         chunks.append(
             TextChunk(
                 doc_id=f"{doc_id_prefix}:text:{idx}",
