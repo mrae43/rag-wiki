@@ -11,8 +11,14 @@ def count_tokens(text: str) -> int:
     return max(1, len(text) // CHARS_PER_TOKEN)
 
 
-def semantic_overlap(prev_section: str, next_section: str, overlap_chars: int = OVERLAP_CHARS) -> str:
-    tail = prev_section[-overlap_chars:] if len(prev_section) > overlap_chars else prev_section
+def semantic_overlap(
+    prev_section: str, next_section: str, overlap_chars: int = OVERLAP_CHARS
+) -> str:
+    tail = (
+        prev_section[-overlap_chars:]
+        if len(prev_section) > overlap_chars
+        else prev_section
+    )
     return tail + next_section
 
 
@@ -52,7 +58,9 @@ def split_by_sections(
                     for i in range(0, len(para), max_chars - overlap_chars):
                         chunk = para[i : i + max_chars]
                         if chunk:
-                            heading = para[: min(80, len(para) // 4)] if i == 0 else None
+                            heading = (
+                                para[: min(80, len(para) // 4)] if i == 0 else None
+                            )
                             result.append((chunk, heading))
                     buffer = ""
                     buffer_section = None
@@ -89,7 +97,9 @@ def _apply_overlap(
     for i in range(1, len(chunks)):
         prev_text = chunks[i - 1][0]
         curr_text, heading = chunks[i]
-        tail = prev_text[-overlap_chars:] if len(prev_text) > overlap_chars else prev_text
+        tail = (
+            prev_text[-overlap_chars:] if len(prev_text) > overlap_chars else prev_text
+        )
         overlapped = tail + curr_text
         result.append((overlapped, heading or overlapped))
 
