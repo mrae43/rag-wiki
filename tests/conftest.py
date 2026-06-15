@@ -3,7 +3,7 @@ tests/conftest
 ------------
 Shared test fixtures for the RAGWiki test suite.
 
-Provides: database engine, per-test rollback session, mock LLM provider,
+Provides: database engine, per-test rollback session, mock LLM providers,
 FastAPI test client, and a settings override.
 """
 
@@ -19,7 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 
 from rag_wiki.db.base import Base
 from rag_wiki.main import app as fastapi_app
-from rag_wiki.providers.base import LLMProvider
+from rag_wiki.providers.base import (
+    ChatProvider,
+    CompletionRequest,
+    CompletionResponse,
+    EmbeddingProvider,
+    ToolCall,
+)
 from rag_wiki.settings import Settings, get_settings
 
 TEST_DATABASE_URL = os.getenv(
@@ -63,23 +69,49 @@ async def db(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
         await trans.rollback()
 
 
-class FakeLLMProvider:
-    """Test double that satisfies the LLMProvider protocol."""
+class FakeChatProvider:
+    """Test double that satisfies the ChatProvider protocol."""
 
-    async def complete(self, prompt: str, model: str) -> str:
-        return f"fake-completion-for-{prompt[:20]}"
+    async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        return CompletionResponse(
+            content=f"fake-completion-for-{request.model}",
+            tool_calls=[
+                ToolCall(
+                    id="fake-tool-1",
+                    name="fake_tool",
+                    arguments='{"input": "test"}',
+                )
+            ]
+            if request.tools
+            else [],
+        )
+
+    async def caption_image(
+        self,
+        image_bytes: bytes,
+        image_mime_type: str,
+        model: str,
+    ) -> str:
+        return f"fake-caption-{image_mime_type}"
+
+
+class FakeEmbeddingProvider:
+    """Test double that satisfies the EmbeddingProvider protocol."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
         return [[0.0] * 1536 for _ in texts]
 
-    async def caption_image(self, image_bytes: bytes, model: str) -> str:
-        return "fake image caption"
+
+@pytest.fixture
+def mock_chat_provider() -> ChatProvider:
+    """Return a deterministic chat provider for unit tests."""
+    return FakeChatProvider()
 
 
 @pytest.fixture
-def mock_llm_provider() -> LLMProvider:
-    """Return a deterministic LLM provider for unit tests."""
-    return FakeLLMProvider()
+def mock_embedding_provider() -> EmbeddingProvider:
+    """Return a deterministic embedding provider for unit tests."""
+    return FakeEmbeddingProvider()
 
 
 @pytest.fixture

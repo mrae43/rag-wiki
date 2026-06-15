@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     llm_model_query: str = "gpt-4o"
 
     # Embeddings
+    llm_embedding_provider: str = "openai"
     embedding_model: str = "gemini-embedding-2"
     embedding_dimensions: int = 3072
 
