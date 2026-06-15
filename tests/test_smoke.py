@@ -31,7 +31,7 @@ def test_settings_defaults() -> None:
     settings = get_settings()
     assert isinstance(settings, Settings)
     assert settings.llm_provider == "openai"
-    assert settings.embedding_dimensions == 1536
+    assert settings.embedding_dimensions == 3072
     assert settings.parser == "lightweight"
     assert settings.llm_model_caption == "gpt-4o-mini"
     assert settings.llm_model_extraction == "gpt-4o-mini"
