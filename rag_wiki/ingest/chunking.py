@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections.abc import Sequence
 
 MAX_TOKENS = 512
 OVERLAP_TOKENS = 64
@@ -14,10 +15,6 @@ def count_tokens(text: str) -> int:
 def _split_paragraph(text: str) -> list[str]:
     paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
     return paragraphs if paragraphs else [text]
-
-
-from collections.abc import Sequence
-
 
 def split_by_sections(
     sections: Sequence[tuple[str, int | None]],
