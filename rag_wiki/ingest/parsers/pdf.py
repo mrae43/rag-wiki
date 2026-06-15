@@ -33,11 +33,13 @@ def _detect_body_font_size(page: fitz.Page) -> float:
     return sorted_sizes[mid]
 
 
-def _page_heading_sections(page: fitz.Page, body_size: float) -> list[str]:
+def _page_heading_sections(
+    page: fitz.Page, page_num: int, body_size: float
+) -> list[tuple[str, int]]:
     blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE).get(
         "blocks", []
     )
-    sections: list[str] = []
+    sections: list[tuple[str, int]] = []
     current_lines: list[str] = []
 
     for block in blocks:
@@ -52,14 +54,14 @@ def _page_heading_sections(page: fitz.Page, body_size: float) -> list[str]:
 
             if max_span_size >= body_size * 1.5 and text.strip():
                 if current_lines:
-                    sections.append("\n".join(current_lines))
+                    sections.append(("\n".join(current_lines), page_num))
                     current_lines = []
                 current_lines.append(text.strip())
             else:
                 current_lines.append(text.strip())
 
     if current_lines:
-        sections.append("\n".join(current_lines))
+        sections.append(("\n".join(current_lines), page_num))
 
     return sections
 
@@ -131,7 +133,7 @@ def parse_pdf(file_path: str) -> list[ParsedChunk]:
     doc_id_prefix = f"pdf:{file_path}"
 
     chunks: list[ParsedChunk] = []
-    all_sections: list[str] = []
+    all_sections: list[tuple[str, int]] = []
 
     for page_num in range(len(doc)):
         page = doc.load_page(page_num)
@@ -155,20 +157,21 @@ def parse_pdf(file_path: str) -> list[ParsedChunk]:
             )
             chunks.extend(table_chunks)
 
-        sections = _page_heading_sections(page, body_size)
+        sections = _page_heading_sections(page, page_num, body_size)
         if sections:
             all_sections.extend(sections)
         elif text.strip():
-            all_sections.append(text.strip())
+            all_sections.append((text.strip(), page_num))
 
     if all_sections:
         chunked = split_by_sections(all_sections)
-        for idx, (section_text, section_heading) in enumerate(chunked):
+        for idx, (section_text, section_heading, text_page_num) in enumerate(chunked):
             chunks.append(
                 TextChunk(
                     doc_id=f"{doc_id_prefix}:text:{idx}",
                     text_content=section_text,
                     source_filename=file_name,
+                    page_number=text_page_num,
                     metadata={"section_heading": section_heading or ""},
                 )
             )
