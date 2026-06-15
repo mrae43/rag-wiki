@@ -269,7 +269,7 @@ CONTEXT.md         # Domain terminology glossary
 | ✅ Done | Database schema + Alembic migrations |
 | ✅ Done | Lightweight parsing pipeline |
 | ✅ Done | Docker Compose stack |
-| 🔲 Next | LLM provider abstraction + OpenAI/Anthropic implementations |
+| ✅ Done | LLM provider abstraction + OpenAI/Anthropic implementations |
 | 🔲 Next | Entity/relation extraction + real-time resolution |
 | 🔲 Next | Wiki page synthesis |
 | 🔲 Next | Hybrid retrieval |

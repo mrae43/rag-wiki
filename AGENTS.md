@@ -30,6 +30,7 @@ over a Postgres + knowledge graph backend.
 - `docs/tech-stack.md` — concrete library/tool choices
 - `docs/coding-standards.md` — code conventions (read before writing anything)
 - `docs/harness-engineering.md` — broader context for agentic system design principles
+- `docs/agent-harness.md` — conceptual mapping of the [16-step agent harness blueprint] in the system
 
 ---
 
