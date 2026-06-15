@@ -95,35 +95,18 @@ class OpenAIProvider(ChatProvider, EmbeddingProvider):
 
         tools = _map_request_tools(request.tools)
 
+        kwargs: dict[str, Any] = {
+            "model": request.model,
+            "messages": messages,
+            "tools": tools,
+        }
+        if request.max_tokens is not None:
+            kwargs["max_tokens"] = request.max_tokens
+        if request.temperature is not None:
+            kwargs["temperature"] = request.temperature
+
         try:
-            if request.max_tokens is not None and request.temperature is not None:
-                raw = await self._client.chat.completions.create(
-                    model=request.model,
-                    messages=messages,  # type: ignore[arg-type]
-                    tools=tools,  # type: ignore[arg-type]
-                    max_tokens=request.max_tokens,
-                    temperature=request.temperature,
-                )
-            elif request.max_tokens is not None:
-                raw = await self._client.chat.completions.create(
-                    model=request.model,
-                    messages=messages,  # type: ignore[arg-type]
-                    tools=tools,  # type: ignore[arg-type]
-                    max_tokens=request.max_tokens,
-                )
-            elif request.temperature is not None:
-                raw = await self._client.chat.completions.create(
-                    model=request.model,
-                    messages=messages,  # type: ignore[arg-type]
-                    tools=tools,  # type: ignore[arg-type]
-                    temperature=request.temperature,
-                )
-            else:
-                raw = await self._client.chat.completions.create(
-                    model=request.model,
-                    messages=messages,  # type: ignore[arg-type]
-                    tools=tools,  # type: ignore[arg-type]
-                )
+            raw = await self._client.chat.completions.create(**kwargs)
         except openai.APIError as exc:
             logger.error(
                 "OpenAI completion failed",
