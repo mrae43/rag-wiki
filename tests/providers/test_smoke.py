@@ -2,23 +2,42 @@
 
 from __future__ import annotations
 
-from rag_wiki.providers.base import LLMProvider
+from rag_wiki.providers.base import (
+    ChatProvider,
+    CompletionRequest,
+    EmbeddingProvider,
+    Message,
+)
 
 
-def test_llm_provider_protocol_methods() -> None:
-    assert hasattr(LLMProvider, "complete")
-    assert hasattr(LLMProvider, "embed")
-    assert hasattr(LLMProvider, "caption_image")
+async def test_fake_chat_provider_complete(mock_chat_provider: ChatProvider) -> None:
+    result = await mock_chat_provider.complete(
+        CompletionRequest(
+            model="gpt-4o-mini",
+            messages=[Message(role="user", content="hello")],
+        ),
+    )
+    assert isinstance(result.content, str)
+    assert "fake-completion" in result.content
 
 
-async def test_fake_llm_provider_complete(mock_llm_provider: LLMProvider) -> None:
-    result = await mock_llm_provider.complete("hello world", model="gpt-4o-mini")
+async def test_fake_chat_provider_caption(mock_chat_provider: ChatProvider) -> None:
+    result = await mock_chat_provider.caption_image(
+        b"fake_image",
+        "image/png",
+        "gpt-4o-mini",
+    )
     assert isinstance(result, str)
-    assert "fake-completion" in result
+    assert "fake-caption" in result
 
 
-async def test_fake_llm_provider_embed(mock_llm_provider: LLMProvider) -> None:
-    result = await mock_llm_provider.embed(["hello", "world"], model="gpt-4o-mini")
+async def test_fake_embedding_provider_embed(
+    mock_embedding_provider: EmbeddingProvider,
+) -> None:
+    result = await mock_embedding_provider.embed(
+        ["hello", "world"],
+        "text-embedding-3-small",
+    )
     assert isinstance(result, list)
     assert len(result) == 2
     assert len(result[0]) == 1536
@@ -26,7 +45,34 @@ async def test_fake_llm_provider_embed(mock_llm_provider: LLMProvider) -> None:
     assert result[1] == [0.0] * 1536
 
 
-async def test_fake_llm_provider_caption(mock_llm_provider: LLMProvider) -> None:
-    result = await mock_llm_provider.caption_image(b"fake_image", model="gpt-4o-mini")
-    assert isinstance(result, str)
-    assert "fake" in result
+async def test_fake_chat_provider_with_tools(mock_chat_provider: ChatProvider) -> None:
+    from rag_wiki.providers.base import ToolDefinition
+
+    result = await mock_chat_provider.complete(
+        CompletionRequest(
+            model="gpt-4o-mini",
+            messages=[Message(role="user", content="hello")],
+            tools=[
+                ToolDefinition(
+                    name="fake_tool",
+                    description="A fake tool",
+                    parameters={"type": "object", "properties": {}},
+                ),
+            ],
+        ),
+    )
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].name == "fake_tool"
+    assert result.tool_calls[0].arguments == '{"input": "test"}'
+
+
+async def test_fake_chat_provider_without_tools(
+    mock_chat_provider: ChatProvider,
+) -> None:
+    result = await mock_chat_provider.complete(
+        CompletionRequest(
+            model="gpt-4o-mini",
+            messages=[Message(role="user", content="hello")],
+        ),
+    )
+    assert len(result.tool_calls) == 0
