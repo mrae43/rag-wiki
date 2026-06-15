@@ -37,7 +37,7 @@ _EXPECTED_TABLES = [
 # HNSW indexes expected after the migration is applied.
 # Note: these indexes are dropped in the latest migration because vector
 # dimensions were bumped to 3072, exceeding the HNSW index limit.
-_EXPECTED_HNSW_INDEXES = []
+_EXPECTED_HNSW_INDEXES: list[str] = []
 
 
 async def _table_exists(conn: AsyncConnection, table_name: str) -> bool:
