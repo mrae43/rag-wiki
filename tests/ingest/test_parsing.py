@@ -159,12 +159,12 @@ class TestSplitBySections:
         assert split_by_sections([]) == []
 
     def test_single_small_section(self) -> None:
-        result = split_by_sections(["hello world"])
+        result = split_by_sections([("hello world", None)])
         assert len(result) == 1
         assert result[0][0] == "hello world"
 
     def test_multiple_sections(self) -> None:
-        sections = ["sec1", "sec2", "sec3"]
+        sections = [("sec1", None), ("sec2", None), ("sec3", None)]
         result = split_by_sections(sections)
         assert len(result) == 1
         texts = result[0][0]
@@ -174,7 +174,7 @@ class TestSplitBySections:
 
     def test_overlap_between_chunks(self) -> None:
         long_section = "A" * (MAX_CHARS + 100)
-        result = split_by_sections([long_section])
+        result = split_by_sections([(long_section, None)])
         assert len(result) >= 2
         assert len(result[0][0]) <= MAX_CHARS + OVERLAP_CHARS
         tail = result[0][0][-OVERLAP_CHARS:]
@@ -182,11 +182,11 @@ class TestSplitBySections:
 
     def test_very_long_single_section_paragraph_split(self) -> None:
         section = ("paragraph one. " * 200) + "\n\n" + ("paragraph two. " * 200)
-        result = split_by_sections([section])
+        result = split_by_sections([(section, None)])
         assert len(result) >= 1
 
     def test_no_heading_metadata(self) -> None:
-        result = split_by_sections(["just a single section"])
+        result = split_by_sections([("just a single section", None)])
         assert result[0][1] == "just a single section"
 
 
