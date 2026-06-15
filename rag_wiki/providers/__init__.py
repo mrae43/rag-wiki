@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-from typing import TypeVar
 
 import structlog
 
@@ -27,8 +26,6 @@ from rag_wiki.providers.openai import OpenAIProvider
 from rag_wiki.settings import Settings
 
 logger = structlog.get_logger(__name__)
-
-T = TypeVar("T", bound=ChatProvider)
 
 CHAT_PROVIDERS: dict[str, Callable[[Settings], ChatProvider]] = {
     "openai": OpenAIProvider,
@@ -126,10 +123,7 @@ def get_chat_provider(settings: Settings) -> ChatProvider:
 
 def get_embedding_provider(settings: Settings) -> EmbeddingProvider:
     """Return the configured EmbeddingProvider (unwrapped — retries live in caller)."""
-    provider_cls = EMBEDDING_PROVIDERS.get(
-        settings.llm_embedding_provider,
-        OpenAIProvider,
-    )
+    provider_cls = EMBEDDING_PROVIDERS.get(settings.llm_embedding_provider)
     if provider_cls is None:
         raise LLMProviderError(
             f"Unknown embedding provider: {settings.llm_embedding_provider!r}"
