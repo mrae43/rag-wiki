@@ -157,7 +157,7 @@ temp/
 
 # Uploaded / ingested documents (if stored locally)
 uploads/
-ingest/
+/ingest/
 
 # =============================================================================
 # Node (if any frontend assets are added later)
