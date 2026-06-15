@@ -24,3 +24,7 @@ class EntityResolutionError(RagWikiError):
 
 class IngestError(RagWikiError):
     """Raised when a source document cannot be processed."""
+
+
+class ParseError(IngestError):
+    """Raised when a document cannot be parsed by any available parser."""
