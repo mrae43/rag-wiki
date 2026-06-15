@@ -18,7 +18,6 @@ from rag_wiki.ingest.parsers.pdf import parse_pdf
 from rag_wiki.ingest.parsers.simple import parse_simple
 from rag_wiki.ingest.schemas import ChunkType, ImageChunk, TextChunk
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -94,7 +93,9 @@ def txt_file() -> Generator[str, None, None]:
         + "SECTION THREE\n\n\n"
         + ("C" * 300 + "\n") * 10
     )
-    with tempfile.NamedTemporaryFile(suffix=".txt", mode="w", delete=False, encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(
+        suffix=".txt", mode="w", delete=False, encoding="utf-8"
+    ) as f:
         f.write(content)
         path = f.name
     yield path
@@ -102,7 +103,9 @@ def txt_file() -> Generator[str, None, None]:
 
 
 def _write_temp(content: str, suffix: str) -> str:
-    with tempfile.NamedTemporaryFile(suffix=suffix, mode="w", delete=False, encoding="utf-8") as f:
+    with tempfile.NamedTemporaryFile(
+        suffix=suffix, mode="w", delete=False, encoding="utf-8"
+    ) as f:
         f.write(content)
         path = f.name
     return path
@@ -110,8 +113,18 @@ def _write_temp(content: str, suffix: str) -> str:
 
 @pytest.fixture()
 def md_file() -> Generator[str, None, None]:
-    content = "# Heading 1\n\nContent under heading 1\n\n## Heading 2\n\nContent under heading 2\n\nMore content\n\n# Heading 3\n\nFinal section"
+    content = (
+        "# Heading 1\n\nContent under heading 1\n\n## Heading 2\n\n"
+        "Content under heading 2\n\nMore content\n\n# Heading 3\n\nFinal section"
+    )
     path = _write_temp(content, ".md")
+    yield path
+    os.unlink(path)
+
+
+@pytest.fixture()
+def invalid_pdf() -> Generator[str, None, None]:
+    path = _write_temp("not a real pdf", ".pdf")
     yield path
     os.unlink(path)
 
@@ -194,18 +207,22 @@ class TestSimpleParser:
 
     def test_md_heading_split(self, md_file: str) -> None:
         chunks = parse_simple(md_file)
-        assert any("Heading 1" in c.text_content for c in chunks if isinstance(c, TextChunk))
+        assert any(
+            "Heading 1" in c.text_content for c in chunks if isinstance(c, TextChunk)
+        )
 
     def test_empty_file(self) -> None:
         path = _write_temp("", ".txt")
         try:
             chunks = parse_simple(path)
-            assert len(chunks) >= 0
+            assert len(chunks) == 0
         finally:
             os.unlink(path)
 
     def test_no_heading_plain_text(self) -> None:
-        path = _write_temp("Just some plain text without any headings or structure.", ".txt")
+        path = _write_temp(
+            "Just some plain text without any headings or structure.", ".txt"
+        )
         try:
             chunks = parse_simple(path)
             assert len(chunks) == 1
@@ -242,7 +259,7 @@ class TestPdfParser:
 
     def test_empty_pdf(self, empty_pdf: str) -> None:
         chunks = parse_pdf(empty_pdf)
-        assert len(chunks) >= 0
+        assert len(chunks) == 0
 
     def test_source_filename_set(self, pdf_with_text: str) -> None:
         chunks = parse_pdf(pdf_with_text)
@@ -322,10 +339,6 @@ class TestErrorHandling:
         with pytest.raises(ParseError):
             parse_document(path)
 
-    def test_invalid_pdf_bytes(self) -> None:
-        path = _write_temp("not a real pdf", ".pdf")
-        try:
-            with pytest.raises(Exception):
-                parse_pdf(path)
-        finally:
-            os.unlink(path)
+    def test_invalid_pdf_bytes(self, invalid_pdf: str) -> None:
+        with pytest.raises(fitz.FileDataError):
+            parse_pdf(invalid_pdf)
