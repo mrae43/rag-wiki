@@ -68,9 +68,9 @@ def parse_simple(file_path: str) -> list[ParsedChunk]:
     else:
         raw_sections = _detect_sections_txt(text)
 
-    chunked = split_by_sections(raw_sections)
+    chunked = split_by_sections([(s, None) for s in raw_sections])
     chunks: list[ParsedChunk] = []
-    for idx, (section_text, section_heading) in enumerate(chunked):
+    for idx, (section_text, section_heading, _) in enumerate(chunked):
         chunks.append(
             TextChunk(
                 doc_id=f"simple:{file_path}:{idx}",

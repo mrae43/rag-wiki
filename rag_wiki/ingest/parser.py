@@ -36,8 +36,10 @@ def parse_document(
         engine = "unstructured"
 
     if engine == "pdf":
-        from rag_wiki.ingest.parsers.pdf import parse_pdf
-
+        try:
+            from rag_wiki.ingest.parsers.pdf import parse_pdf
+        except ImportError:
+            raise ParseError("PyMuPDF (fitz) is required for PDF parsing") from None
         return parse_pdf(file_path)
 
     if engine == "ocr":
@@ -56,8 +58,8 @@ def parse_document(
                 from rag_wiki.ingest.chunking import split_by_sections
                 from rag_wiki.ingest.schemas import TextChunk
 
-                chunked = split_by_sections([text.strip()])
-                for idx, (section_text, _) in enumerate(chunked):
+                chunked = split_by_sections([(text.strip(), page_num)])
+                for idx, (section_text, _, _) in enumerate(chunked):
                     chunks.append(
                         TextChunk(
                             doc_id=f"ocr:{file_path}:{page_num}:{idx}",

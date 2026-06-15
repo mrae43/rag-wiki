@@ -69,8 +69,8 @@ def parse_unstructured(file_path: str) -> list[ParsedChunk]:
     if current_section_lines:
         sections.append("\n".join(current_section_lines))
 
-    chunked = split_by_sections(sections)
-    for idx, (section_text, section_heading) in enumerate(chunked):
+    chunked = split_by_sections([(s, None) for s in sections])
+    for idx, (section_text, section_heading, _) in enumerate(chunked):
         chunks.append(
             TextChunk(
                 doc_id=f"{doc_id_prefix}:text:{idx}",
