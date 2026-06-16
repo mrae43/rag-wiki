@@ -16,6 +16,7 @@ relation indices. Returns a mapping of original index → resolved Entity.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from typing import Any
@@ -26,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.db.models.graph import Entity, PublishedStatus, Relation
 from rag_wiki.db.models.source import Chunk
-from rag_wiki.exceptions import EntityResolutionError, ExtractionError
+from rag_wiki.exceptions import EntityResolutionError, ExtractionError, LLMProviderError
 from rag_wiki.graph.merge import merge_entity
 from rag_wiki.graph.schemas import ExtractedEntity, ExtractedRelation, MergeDecision
 from rag_wiki.providers.base import (
@@ -42,6 +43,9 @@ logger = structlog.get_logger(__name__)
 _RESOLUTION_PROMPT = """\
 You are an entity resolution engine. Decide whether the extracted entity
 should be merged into an existing entity or created as a new one.
+
+Source chunk:
+{chunk_text}
 
 Extracted entity:
 - canonical_name: {canonical_name}
@@ -79,7 +83,10 @@ _MERGE_DECISION_TOOL = ToolDefinition(
 
 def _advisory_lock_key(canonical_name: str) -> int:
     """Return a 64-bit positive integer suitable for pg_try_advisory_lock."""
-    return hash(canonical_name) & 0x7FFFFFFFFFFFFFFF
+    return (
+        int.from_bytes(hashlib.md5(canonical_name.encode()).digest()[:8], "big")
+        & 0x7FFFFFFFFFFFFFFF
+    )
 
 
 def _build_candidate_block(candidates: list[Entity]) -> str:
@@ -134,6 +141,8 @@ async def resolve_entities(
                 [embed_text],
                 model=settings.embedding_model,
             )
+        except LLMProviderError:
+            raise
         except Exception as exc:
             raise EntityResolutionError(
                 f"Embedding failed for candidate={candidate.canonical_name!r} "
@@ -218,6 +227,7 @@ async def resolve_entities(
                     entity_type=candidate.entity_type,
                     description=candidate.description,
                     candidates=candidate_block,
+                    chunk_text=chunk.text_content or "",
                 )
                 request = CompletionRequest(
                     system=prompt,
@@ -330,13 +340,14 @@ async def resolve_entities(
             source_entity = resolved.get(rel.source_idx)
             target_entity = resolved.get(rel.target_idx)
             if source_entity is None or target_entity is None:
-                logger.warning(
-                    "relation skipped, unresolved entity index",
-                    source_idx=rel.source_idx,
-                    target_idx=rel.target_idx,
-                    chunk_id=str(chunk.id),
+                source_status = "resolved" if source_entity else "missing"
+                target_status = "resolved" if target_entity else "missing"
+                raise EntityResolutionError(
+                    "relation references unresolved entity index: "
+                    f"source_idx={rel.source_idx} ({source_status}), "
+                    f"target_idx={rel.target_idx} ({target_status}), "
+                    f"chunk_id={chunk.id}"
                 )
-                continue
             relation = Relation(
                 source_entity_id=source_entity.id,
                 target_entity_id=target_entity.id,
