@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class ExtractedEntity(BaseModel):
@@ -68,6 +68,14 @@ class MergeDecision(BaseModel):
     decision: Literal["merge", "new"]
     merged_into_id: UUID | None = None
     reasoning: str
+
+    @model_validator(mode="after")
+    def _validate_merge_id(self) -> MergeDecision:
+        if self.decision == "merge" and self.merged_into_id is None:
+            raise ValueError("merged_into_id required when decision is 'merge'")
+        if self.decision == "new" and self.merged_into_id is not None:
+            raise ValueError("merged_into_id must be None when decision is 'new'")
+        return self
 
 
 __all__ = [

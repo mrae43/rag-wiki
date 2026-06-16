@@ -94,12 +94,8 @@ class EntityMergeLog(Base, UUIDMixin, TimestampMixin):
         sa.Index("idx_entity_merge_log_merged_from_id", "merged_from_id"),
     )
 
-    merged_from_id: Mapped[uuid.UUID | None] = mapped_column(
-        sa.ForeignKey("entities.id", ondelete="SET NULL"), nullable=True
-    )
-    merged_into_id: Mapped[uuid.UUID | None] = mapped_column(
-        sa.ForeignKey("entities.id", ondelete="SET NULL"), nullable=True
-    )
+    merged_from_id: Mapped[uuid.UUID | None] = mapped_column(sa.UUID, nullable=True)
+    merged_into_id: Mapped[uuid.UUID | None] = mapped_column(sa.UUID, nullable=True)
     chunk_id: Mapped[uuid.UUID | None] = mapped_column(
         sa.ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
     )
