@@ -22,6 +22,10 @@ class EntityResolutionError(RagWikiError):
     """Raised when entity resolution cannot make a merge/new decision."""
 
 
+class ExtractionError(RagWikiError):
+    """Raised when entity/relation extraction fails or returns invalid data."""
+
+
 class IngestError(RagWikiError):
     """Raised when a source document cannot be processed."""
 
