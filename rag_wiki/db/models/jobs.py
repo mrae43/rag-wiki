@@ -62,3 +62,6 @@ class Job(Base, UUIDMixin, TimestampMixin):
     result: Mapped[dict[str, Any] | None] = mapped_column(
         sa.dialects.postgresql.JSONB, nullable=True
     )
+    completed_at: Mapped[datetime.datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
+    )
