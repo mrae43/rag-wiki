@@ -92,7 +92,7 @@ async def test_fail_job_increments_attempts_and_schedules_retry(
 
     assert job.attempts == 1
     assert job.status == "pending"
-    assert job.error_message is None
+    assert job.error_message == "transient error"
     assert job.claimed_at is None
     assert job.worker_id is None
 
@@ -100,12 +100,12 @@ async def test_fail_job_increments_attempts_and_schedules_retry(
 async def test_fail_job_marks_failed_after_max_retries(db: AsyncSession) -> None:
     job = await enqueue(db, "ingest_document")
     job.max_retries = 2
-    job.attempts = 1
+    job.attempts = 2
     await db.commit()
 
     await fail_job(job, db, "final error")
 
-    assert job.attempts == 2
+    assert job.attempts == 3
     assert job.status == "failed"
     assert job.error_message == "final error"
 

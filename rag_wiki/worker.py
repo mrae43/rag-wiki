@@ -69,6 +69,8 @@ async def worker_loop() -> None:
                         )
                     # elif job.job_type == "...":
                     #     ...
+                    else:
+                        raise ValueError(f"Unknown job type: {job.job_type}")
 
                     await complete_job(job, db)
                     await db.commit()
