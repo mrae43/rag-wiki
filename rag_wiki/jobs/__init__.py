@@ -28,7 +28,7 @@ _CLAIM_JOB_SQL = """
     WHERE id = (
         SELECT id FROM jobs
         WHERE status = 'pending'
-          AND attempts < max_retries
+          AND attempts <= max_retries
         ORDER BY scheduled_at NULLS FIRST, created_at
         LIMIT 1
         FOR UPDATE SKIP LOCKED
@@ -132,7 +132,8 @@ async def fail_job(job: Job, db: AsyncSession, error_message: str) -> None:
         error_message: Human-readable reason for the failure.
     """
     job.attempts += 1
-    if job.attempts < job.max_retries:
+    job.error_message = error_message
+    if job.attempts <= job.max_retries:
         job.status = "pending"
         job.claimed_at = None
         job.worker_id = None
@@ -142,10 +143,10 @@ async def fail_job(job: Job, db: AsyncSession, error_message: str) -> None:
             job_type=job.job_type,
             attempts=job.attempts,
             max_retries=job.max_retries,
+            error_message=error_message,
         )
     else:
         job.status = "failed"
-        job.error_message = error_message
         logger.error(
             "job failed after max retries",
             job_id=str(job.id),
