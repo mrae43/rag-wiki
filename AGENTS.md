@@ -131,8 +131,8 @@ rag_wiki/
   settings.py          # pydantic-settings config (all env vars)
   exceptions.py        # Domain exception hierarchy rooted in RagWikiError
   providers/           # LLMProvider implementations (openai.py, anthropic.py, base.py)
-  ingest/              # Parse → extract → resolve → embed pipeline
-  graph/               # Entity/relation extraction, resolution, graph queries
+  ingest/              # Parse → chunk → caption → embed → extract → resolve pipeline
+  graph/               # Entity/relation extraction, resolution, merge
   retrieval/           # Hybrid retrieval (seed-finding, traversal, context assembly)
   wiki/                # Wiki page synthesis and export
   jobs/                # Job queue (enqueue, claim, complete, fail)
