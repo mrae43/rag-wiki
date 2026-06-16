@@ -70,9 +70,30 @@ async def db(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
 
 
 class FakeChatProvider:
-    """Test double that satisfies the ChatProvider protocol."""
+    """Test double that satisfies the ChatProvider protocol.
+
+    Supports per-tool canned responses via ``response_map`` so that tests
+    for extraction and resolution can return different JSON payloads.
+    """
+
+    def __init__(self, response_map: dict[str, str] | None = None) -> None:
+        self.response_map = response_map or {}
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        if request.tools and self.response_map:
+            # Return the first matching tool response from the map.
+            for tool in request.tools:
+                if tool.name in self.response_map:
+                    return CompletionResponse(
+                        content=f"fake-completion-for-{request.model}",
+                        tool_calls=[
+                            ToolCall(
+                                id="fake-tool-1",
+                                name=tool.name,
+                                arguments=self.response_map[tool.name],
+                            )
+                        ],
+                    )
         return CompletionResponse(
             content=f"fake-completion-for-{request.model}",
             tool_calls=[
