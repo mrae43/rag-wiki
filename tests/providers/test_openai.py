@@ -25,6 +25,7 @@ def _make_settings() -> Settings:
         database_url="postgresql+asyncpg://test:test@localhost:5432/test",
         llm_api_key="test-key",
         llm_embedding_provider="openai",
+        send_dimensions=True,
     )
 
 
