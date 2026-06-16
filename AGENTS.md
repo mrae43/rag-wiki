@@ -43,7 +43,7 @@ over a Postgres + knowledge graph backend.
 - pgvector + pgvector-python (embedding column type)
 - structlog (structured logging — never use `print()` or the stdlib `logging` module directly)
 - pytest + pytest-asyncio · ruff (lint & format) · mypy (type checking)
-- Docker / Docker Compose (local dev) · Helm chart (production)
+- Docker / Docker Compose (local dev) · Helm chart (production) — planned
 - Configuration via environment variables only — see `.env.example`
 
 ---
@@ -70,15 +70,19 @@ File export to `.md` files (for Obsidian) is optional and derived, never
 primary storage. CLI: `rag-wiki export`. (ADR-0006)
 
 **No direct LLM API calls outside the provider abstraction** — all LLM calls
-go through the `LLMProvider` protocol (`complete()`, `embed()`,
-`caption_image()`). Never import `openai` or `anthropic` outside
-`rag_wiki/providers/`. Per-operation model selection via env vars:
-`LLM_MODEL_CAPTION`, `LLM_MODEL_EXTRACTION`, `LLM_MODEL_WIKI_SYNTHESIS`,
-`LLM_MODEL_QUERY`, `EMBEDDING_MODEL`. (ADR-0007)
+go through the `ChatProvider` and `EmbeddingProvider` protocols (defined in
+`rag_wiki/providers/base.py`). `ChatProvider` provides `complete()` and
+`caption_image()`; `EmbeddingProvider` provides `embed()`. Never import
+`openai` or `anthropic` outside `rag_wiki/providers/`. Per-operation model
+selection via env vars:
+`LLM_MODEL_CAPTION`, `LLM_MODEL_EXTRACTION`, `LLM_MODEL_RESOLUTION`,
+`LLM_MODEL_WIKI_SYNTHESIS`, `LLM_MODEL_QUERY`, `EMBEDDING_MODEL`.
+Also set `LLM_PROVIDER` (chat) and `LLM_EMBEDDING_PROVIDER` (embeddings),
+`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_API_VERSION`. (ADR-0007)
 
 **Postgres-native job queue** — a `jobs` table with `SELECT FOR UPDATE SKIP
 LOCKED` claiming, behind the interface `enqueue()` / `claim_next()` /
-`complete()` / `fail()`. Not Celery/RQ. Worker: `python -m rag_wiki.worker`.
+`complete_job()` / `fail_job()`. Not Celery/RQ. Worker: `python -m rag_wiki.worker`.
 The interface is designed so a future Celery/RQ migration is additive, not a
 rewrite. (ADR-0005)
 
@@ -114,7 +118,7 @@ only, not defer-all-to-batch. (ADR-0008)
 | 0004 | Deployment | Single-tenant, per-customer |
 | 0005 | Job queue | Postgres-native (`jobs` table, SKIP LOCKED) |
 | 0006 | Wiki storage | Postgres `wiki_pages` table, file export optional |
-| 0007 | LLM calls | Thin `LLMProvider` protocol, no direct SDK imports outside providers/ |
+| 0007 | LLM calls | Thin `ChatProvider` + `EmbeddingProvider` protocols, no direct SDK imports outside providers/ |
 | 0008 | Entity resolution | Real-time (embedding + LLM) + periodic lint |
 | 0009 | Retrieval | Hybrid single-mode (vector seed + graph traversal) |
 | 0010 | Ingestion workflow | Fully automated; `status` column for future review queue |
@@ -130,24 +134,37 @@ rag_wiki/
   cli.py               # CLI commands (rag-wiki export, ...)
   settings.py          # pydantic-settings config (all env vars)
   exceptions.py        # Domain exception hierarchy rooted in RagWikiError
-  providers/           # LLMProvider implementations (openai.py, anthropic.py, base.py)
+  providers/           # ChatProvider + EmbeddingProvider implementations
+    base.py              # Protocols (ChatProvider, EmbeddingProvider, data models)
+    openai.py            # Full implementation (complete, embed, caption_image)
+    anthropic.py         # Stub — TODO (#TODO comment, no code)
+    __init__.py          # Retry wrapper, provider registry, get_chat_provider()
   ingest/              # Parse → chunk → caption → embed → extract → resolve pipeline
-  graph/               # Entity/relation extraction, resolution, merge
-  retrieval/           # Hybrid retrieval (seed-finding, traversal, context assembly)
-  wiki/                # Wiki page synthesis and export
-  jobs/                # Job queue (enqueue, claim, complete, fail)
-  db/                  # SQLAlchemy models, session, Alembic env
+  graph/               # extraction.py, resolution.py, merge.py, schemas.py
+  retrieval/           # Hybrid retrieval (planned — only __init__.py docstring)
+  wiki/                # Wiki synthesis (planned — only __init__.py docstring)
+  jobs/                # Job queue (enqueue, claim_next, complete_job, fail_job)
+  db/
+    models/              # graph.py, wiki.py, jobs.py, source.py (Chunk lives here)
+    session.py           # Async session factory
+    base.py              # Declarative base, UUIDMixin, TimestampMixin
 tests/
   providers/
   ingest/
   graph/
+  db/                  # test_models.py, test_migration.py, test_smoke.py
   retrieval/
   wiki/
   jobs/
+  conftest.py            # Shared fixtures
+  test_smoke.py          # Top-level smoke tests
 ```
 
-Test file mirrors source file: `rag_wiki/graph/extraction.py` →
-`tests/graph/test_extraction.py`.
+Test file mirrors source file where possible: `rag_wiki/graph/extraction.py` →
+`tests/graph/test_extraction.py`. Some modules (e.g., `schemas.py`, `main.py`,
+`worker.py`, `cli.py`, `session.py`) lack dedicated tests. Top-level tests
+(`tests/test_smoke.py`) cover shared concerns. New test files should follow the
+mirror pattern when adding a new module.
 
 ---
 
