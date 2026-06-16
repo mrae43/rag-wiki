@@ -16,6 +16,9 @@ from rag_wiki.db.models.index import (
     Entity as Entity,
 )
 from rag_wiki.db.models.index import (
+    EntityMergeLog as EntityMergeLog,
+)
+from rag_wiki.db.models.index import (
     Job as Job,
 )
 from rag_wiki.db.models.index import (

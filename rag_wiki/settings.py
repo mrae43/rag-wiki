@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     # Per-operation models
     llm_model_caption: str = "gpt-4o-mini"
     llm_model_extraction: str = "gpt-4o-mini"
+    llm_model_resolution: str = "gpt-4o"
     llm_model_wiki_synthesis: str = "gpt-4o"
     llm_model_query: str = "gpt-4o"
 
@@ -24,6 +25,10 @@ class Settings(BaseSettings):
     llm_embedding_provider: str = "openai"
     embedding_model: str = "gemini-embedding-2"
     embedding_dimensions: int = 3072
+
+    # Entity resolution
+    entity_resolution_top_k: int = 5
+    entity_resolution_distance_threshold: float = 0.6
 
     # pgvector HNSW index settings
     hnsw_m: int = 24

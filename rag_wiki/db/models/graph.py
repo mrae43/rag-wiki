@@ -81,6 +81,34 @@ class Entity(Base, UUIDMixin, TimestampMixin):
     )
 
 
+class EntityMergeLog(Base, UUIDMixin, TimestampMixin):
+    """Audit log for entity merge operations.
+
+    One row is written each time an entity is merged into another during
+    real-time resolution (ADR-0008). The table is append-only; no updates.
+    """
+
+    __tablename__ = "entity_merge_log"
+    __table_args__ = (
+        sa.Index("idx_entity_merge_log_merged_into_id", "merged_into_id"),
+        sa.Index("idx_entity_merge_log_merged_from_id", "merged_from_id"),
+    )
+
+    merged_from_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("entities.id", ondelete="CASCADE"), nullable=False
+    )
+    merged_into_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("entities.id", ondelete="CASCADE"), nullable=False
+    )
+    chunk_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("chunks.id", ondelete="SET NULL"), nullable=True
+    )
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        sa.ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True
+    )
+    reason: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+
 class Relation(Base, UUIDMixin, TimestampMixin):
     """Knowledge graph edge linking two entities, with provenance via chunk_id."""
 
