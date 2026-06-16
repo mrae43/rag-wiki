@@ -10,7 +10,7 @@ from rag_wiki.exceptions import (
     RagWikiError,
 )
 from rag_wiki.main import app as fastapi_app
-from rag_wiki.settings import Settings, get_settings
+from rag_wiki.settings import Settings
 
 
 def test_package_imports() -> None:
@@ -27,16 +27,15 @@ def test_exception_hierarchy() -> None:
 
 
 def test_settings_defaults() -> None:
-    get_settings.cache_clear()
-    settings = get_settings()
-    assert isinstance(settings, Settings)
-    assert settings.llm_provider == "openai"
-    assert settings.embedding_dimensions == 2048
-    assert settings.parser == "lightweight"
-    assert settings.llm_model_caption == "meta/llama-3.1-8b-instruct"
-    assert settings.llm_model_extraction == "meta/llama-3.1-8b-instruct"
-    assert settings.llm_model_wiki_synthesis == "meta/llama-3.1-8b-instruct"
-    assert settings.llm_model_query == "meta/llama-3.1-8b-instruct"
+    fields = Settings.model_fields
+    assert fields["llm_provider"].default == "openai"
+    assert fields["embedding_dimensions"].default == 3072
+    assert fields["parser"].default == "lightweight"
+    assert fields["llm_model_caption"].default == "gpt-4o-mini"
+    assert fields["llm_model_extraction"].default == "gpt-4o-mini"
+    assert fields["llm_model_resolution"].default == "gpt-4o"
+    assert fields["llm_model_wiki_synthesis"].default == "gpt-4o"
+    assert fields["llm_model_query"].default == "gpt-4o"
 
 
 def test_fastapi_app_creates() -> None:
