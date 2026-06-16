@@ -11,15 +11,15 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 
 ## Features
 
-- **Multimodal ingestion** — text, tables, images, and equations parsed into typed chunks (lightweight by default; optional MinerU-backed full multimodal path)
+- **Multimodal ingestion** — text, tables, and images parsed into typed chunks (lightweight by default; optional MinerU-backed full multimodal path)
 - **Knowledge graph** — entities and relations extracted from every chunk, stored as plain relational tables in Postgres with real-time entity resolution
-- **Hybrid retrieval** — vector similarity (pgvector) seeds a graph traversal (recursive CTE) for richer, context-aware answers than vector-only RAG
-- **LLM-maintained wiki** — markdown pages synthesized and kept current in Postgres; optional export to a directory of `.md` files for Obsidian browsing
-- **Pluggable LLM providers** — OpenAI, Azure OpenAI, Anthropic, vLLM, Ollama — swap by config, no code changes
+- **Hybrid retrieval** — *planned* — vector similarity (pgvector) will seed a graph traversal (recursive CTE) for richer, context-aware answers
+- **LLM-maintained wiki** — *planned* — markdown pages synthesized and kept current in Postgres; optional export to a directory of `.md` files for Obsidian browsing
+- **Pluggable LLM providers** — OpenAI (fully implemented); Anthropic, Azure OpenAI, vLLM, and Ollama are config variants on the OpenAI-compatible path — swap by config, no code changes
 - **Single Postgres backend** — vectors, knowledge graph, job queue, and wiki pages all in one database; no Redis, no Neo4j, no separate vector store
 - **Background job queue** — Postgres-native (`SELECT FOR UPDATE SKIP LOCKED`), durable and restart-safe, with a clear migration path to Celery/RQ
 - **Self-hosted, enterprise-ready** — Docker Compose for small teams, Helm chart for production; single-tenant by design for data sovereignty
-- **Obsidian export** — `rag-wiki export` renders wiki pages to a directory of `.md` files for graph-view browsing
+- **Obsidian export** — *planned* — `rag-wiki export` will render wiki pages to a directory of `.md` files for graph-view browsing
 
 ---
 
@@ -40,25 +40,25 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
   Query                 │  └──────────┘   └───────────────┘  │
      │                  └──────────────────────┬──────────────┘
      ▼                                         │
-  ┌──────────────────┐                         │
-  │ Hybrid Retrieval │◀────────────────────────┘
-  │ vector seed +    │
-  │ graph traversal  │
-  └────────┬─────────┘
-           │
-           ▼
-  ┌──────────────────┐        ┌──────────────────┐
-  │   LLMProvider    │        │   Wiki Synthesis  │
-  │ (OpenAI / Anthr  │        │  (LLM-maintained  │
-  │  / vLLM / Ollama)│        │   wiki_pages)     │
-  └──────────────────┘        └──────────────────┘
+   ┌──────────────────┐ (🔲 planned)           │
+   │ Hybrid Retrieval │◀────────────────────────┘
+   │ vector seed +    │
+   │ graph traversal  │
+   └────────┬─────────┘
+            │
+            ▼
+   ┌──────────────────┐        ┌──────────────────┐ (🔲 planned)
+   │   LLMProvider    │        │   Wiki Synthesis  │
+   │ (OpenAI / Anthr  │        │  (LLM-maintained  │
+   │  / vLLM / Ollama)│        │   wiki_pages)     │
+   └──────────────────┘        └──────────────────┘
 ```
 
 **Three operations drive everything:**
 
-- **Ingest** — parse source → extract chunks → caption non-text → embed → extract entities/relations → resolve against existing graph → synthesize/update wiki pages
-- **Query** — vector search for seed chunks/entities → graph traversal for context → LLM answer synthesis → optionally file answer back into wiki
-- **Lint** — periodic health check: find duplicate entities, contradictions, orphan pages, stale claims, missing cross-references
+- **Ingest** ✅ — parse source → extract chunks → caption non-text → embed → extract entities/relations → resolve against existing graph → (synthesize/update wiki pages is planned)
+- **Query** 🔲 — vector search for seed chunks/entities → graph traversal for context → LLM answer synthesis → optionally file answer back into wiki
+- **Lint** 🔲 — periodic health check: find duplicate entities, contradictions, orphan pages, stale claims, missing cross-references
 
 See `docs/adr/` for all architectural decisions and their rationale.
 
@@ -145,27 +145,18 @@ Review the generated file in `alembic/versions/` before committing. Never hand-w
 ### 4. Ingest a document
 
 ```bash
-curl -X POST http://localhost:8000/ingest \
-  -F "file=@/path/to/your/document.pdf"
+docker compose exec api rag-wiki ingest /path/to/your/document.pdf
 ```
 
-The job is queued and processed in the background. Poll `/jobs/{job_id}` for status.
+The job is queued and processed in the background. Check the worker logs for progress.
 
 ### 5. Query the wiki
 
-```bash
-curl -X POST http://localhost:8000/query \
-  -H "Content-Type: application/json" \
-  -d '{"q": "What are the main themes across my documents?"}'
-```
+> 🔲 **Querying is not yet implemented.** The FastAPI endpoints are still under development. You can query the database directly via SQL or the CLI (coming soon).
 
 ### 6. Export to Obsidian (optional)
 
-```bash
-docker compose exec api rag-wiki export --output ./wiki
-```
-
-Opens cleanly in Obsidian — follow links, browse the graph view.
+> 🔲 **Export is not yet implemented.** The CLI stub exists but exits immediately. Once wiki synthesis is built, `rag-wiki export --output ./wiki` will render `.md` files for Obsidian.
 
 ---
 
@@ -214,7 +205,7 @@ API, worker, and Postgres. Suitable for a team of up to ~20 with moderate
 ingestion volume.
 
 ### Production / enterprise
-A Helm chart is provided for Kubernetes deployment with:
+A Helm chart is *planned* for Kubernetes deployment with:
 - Multi-replica API and worker deployments
 - External managed Postgres (RDS, Cloud SQL, Supabase, etc.)
 - Config via Kubernetes Secrets / environment injection
@@ -242,12 +233,16 @@ rag_wiki/
     chunking.py    # Chunk splitting with configurable overlap
     schemas.py     # ParsedChunk discriminated union
     parsers/       # pdf.py, simple.py, unstructured.py
-  graph/           # Entity/relation extraction, resolution, merge
-  retrieval/       # Hybrid retrieval (seed, traverse, assemble)
-  wiki/            # Wiki page synthesis and export
+  graph/
+    extraction.py  # Entity/relation extraction from chunks
+    schemas.py     # Graph models (Entity, Relation, etc.)
+    resolution.py  # Real-time entity resolution (embedding + LLM merge)
+    merge.py       # Hard merge of duplicate entities with FK repointing
+  retrieval/       # Hybrid retrieval (seed, traverse, assemble) — 🔲 planned
+  wiki/            # Wiki page synthesis and export — 🔲 planned
   jobs/            # Job queue (enqueue, claim, complete, fail)
   db/
-    models/        # graph.py, wiki.py, jobs.py, chunk.py, source.py
+    models/        # graph.py, wiki.py, jobs.py, source.py (Chunk lives here)
     session.py     # Async session factory
     base.py        # Declarative base
 tests/             # Mirrors rag_wiki/ structure
@@ -270,9 +265,10 @@ CONTEXT.md         # Domain terminology glossary
 | ✅ Done | Database schema + Alembic migrations |
 | ✅ Done | Lightweight parsing pipeline |
 | ✅ Done | Docker Compose stack |
-| ✅ Done | LLM provider abstraction + OpenAI/Anthropic implementations |
+| ✅ Done | LLM provider abstraction + OpenAI implementation (Anthropic is a stub) |
 | ✅ Done | Entity/relation extraction + real-time resolution |
 | ✅ Done | Background job worker |
+| ✅ Done | Ingest pipeline orchestration (parse → chunk → embed → extract → resolve) |
 | 🔲 Next | Wiki page synthesis |
 | 🔲 Next | Hybrid retrieval |
 | 🔲 Next | FastAPI endpoints |
