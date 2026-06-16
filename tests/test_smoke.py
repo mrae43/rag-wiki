@@ -31,12 +31,12 @@ def test_settings_defaults() -> None:
     settings = get_settings()
     assert isinstance(settings, Settings)
     assert settings.llm_provider == "openai"
-    assert settings.embedding_dimensions == 3072
+    assert settings.embedding_dimensions == 2048
     assert settings.parser == "lightweight"
-    assert settings.llm_model_caption == "gpt-4o-mini"
-    assert settings.llm_model_extraction == "gpt-4o-mini"
-    assert settings.llm_model_wiki_synthesis == "gpt-4o"
-    assert settings.llm_model_query == "gpt-4o"
+    assert settings.llm_model_caption == "meta/llama-3.1-8b-instruct"
+    assert settings.llm_model_extraction == "meta/llama-3.1-8b-instruct"
+    assert settings.llm_model_wiki_synthesis == "meta/llama-3.1-8b-instruct"
+    assert settings.llm_model_query == "meta/llama-3.1-8b-instruct"
 
 
 def test_fastapi_app_creates() -> None:

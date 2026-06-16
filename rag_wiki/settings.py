@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     llm_embedding_provider: str = "openai"
     embedding_model: str = "gemini-embedding-2"
     embedding_dimensions: int = 3072
+    send_dimensions: bool = True
 
     # Entity resolution
     entity_resolution_top_k: int = 5

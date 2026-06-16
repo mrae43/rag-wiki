@@ -178,7 +178,7 @@ class OpenAIProvider(ChatProvider, EmbeddingProvider):
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
         """Return embeddings via the OpenAI embedding API."""
         kwargs: dict[str, Any] = {"model": model, "input": texts}
-        if self._settings.embedding_dimensions:
+        if self._settings.send_dimensions and self._settings.embedding_dimensions:
             kwargs["dimensions"] = self._settings.embedding_dimensions
 
         try:
