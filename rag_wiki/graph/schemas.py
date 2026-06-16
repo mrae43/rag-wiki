@@ -66,7 +66,7 @@ class MergeDecision(BaseModel):
     """
 
     decision: Literal["merge", "new"]
-    merged_into_id: UUID | None
+    merged_into_id: UUID | None = None
     reasoning: str
 
 
