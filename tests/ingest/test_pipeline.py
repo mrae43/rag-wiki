@@ -26,6 +26,7 @@ from rag_wiki.providers.base import (
     CompletionResponse,
     ToolCall,
 )
+from rag_wiki.settings import get_settings
 from rag_wiki.wiki.synthesis import (
     JOB_TYPE_SYNTHESIZE_ENTITY,
     JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
@@ -88,7 +89,8 @@ class FakeEmbeddingProvider:
     """Deterministic embedding provider matching the DB vector column."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
-        return [[0.0] * 2048 for _ in texts]
+        dims = get_settings().embedding_dimensions
+        return [[0.0] * dims for _ in texts]
 
 
 class CountingFailEmbedProvider:
@@ -101,7 +103,8 @@ class CountingFailEmbedProvider:
         self.call_count += 1
         if self.call_count == 1:
             raise LLMProviderError("first embed call fails")
-        return [[0.0] * 2048 for _ in texts]
+        dims = get_settings().embedding_dimensions
+        return [[0.0] * dims for _ in texts]
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +196,7 @@ async def test_ingest_pipeline_roundtrip(
     for chunk in chunks:
         assert chunk.status == ProcessingStatus.PROCESSED
         assert chunk.embedding is not None
-        assert len(chunk.embedding) == 2048
+        assert len(chunk.embedding) == get_settings().embedding_dimensions
 
     # Entities
     entities_result = await db.execute(select(Entity))

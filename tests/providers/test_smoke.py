@@ -8,6 +8,7 @@ from rag_wiki.providers.base import (
     EmbeddingProvider,
     Message,
 )
+from rag_wiki.settings import get_settings
 
 
 async def test_fake_chat_provider_complete(mock_chat_provider: ChatProvider) -> None:
@@ -40,9 +41,10 @@ async def test_fake_embedding_provider_embed(
     )
     assert isinstance(result, list)
     assert len(result) == 2
-    assert len(result[0]) == 2048
-    assert result[0] == [0.0] * 2048
-    assert result[1] == [0.0] * 2048
+    dims = get_settings().embedding_dimensions
+    assert len(result[0]) == dims
+    assert result[0] == [0.0] * dims
+    assert result[1] == [0.0] * dims
 
 
 async def test_fake_chat_provider_with_tools(mock_chat_provider: ChatProvider) -> None:
