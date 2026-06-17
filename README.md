@@ -14,7 +14,7 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 - **Multimodal ingestion** — text, tables, and images parsed into typed chunks (lightweight by default; optional MinerU-backed full multimodal path)
 - **Knowledge graph** — entities and relations extracted from every chunk, stored as plain relational tables in Postgres with real-time entity resolution
 - **Hybrid retrieval** — *planned* — vector similarity (pgvector) will seed a graph traversal (recursive CTE) for richer, context-aware answers
-- **LLM-maintained wiki** — *planned* — markdown pages synthesized and kept current in Postgres; optional export to a directory of `.md` files for Obsidian browsing
+- **LLM-maintained wiki** — markdown pages synthesized and kept current in Postgres during ingestion; optional export to a directory of `.md` files for Obsidian browsing is planned
 - **Pluggable LLM providers** — OpenAI (fully implemented); Anthropic, Azure OpenAI, vLLM, and Ollama are config variants on the OpenAI-compatible path — swap by config, no code changes
 - **Single Postgres backend** — vectors, knowledge graph, job queue, and wiki pages all in one database; no Redis, no Neo4j, no separate vector store
 - **Background job queue** — Postgres-native (`SELECT FOR UPDATE SKIP LOCKED`), durable and restart-safe, with a clear migration path to Celery/RQ
@@ -40,14 +40,14 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
   Query                 │  └──────────┘   └───────────────┘  │
      │                  └──────────────────────┬──────────────┘
      ▼                                         │
-   ┌──────────────────┐ (🔲 planned)           │
+   ┌──────────────────┐                        │
    │ Hybrid Retrieval │◀────────────────────────┘
    │ vector seed +    │
    │ graph traversal  │
    └────────┬─────────┘
             │
             ▼
-   ┌──────────────────┐        ┌──────────────────┐ (🔲 planned)
+   ┌──────────────────┐        ┌──────────────────┐
    │   LLMProvider    │        │   Wiki Synthesis  │
    │ (OpenAI / Anthr  │        │  (LLM-maintained  │
    │  / vLLM / Ollama)│        │   wiki_pages)     │
@@ -56,7 +56,7 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 
 **Three operations drive everything:**
 
-- **Ingest** ✅ — parse source → extract chunks → caption non-text → embed → extract entities/relations → resolve against existing graph → (synthesize/update wiki pages is planned)
+- **Ingest** ✅ — parse source → extract chunks → caption non-text → embed → extract entities/relations → resolve against existing graph → synthesize/update wiki pages for every entity and source
 - **Query** 🔲 — vector search for seed chunks/entities → graph traversal for context → LLM answer synthesis → optionally file answer back into wiki
 - **Lint** 🔲 — periodic health check: find duplicate entities, contradictions, orphan pages, stale claims, missing cross-references
 
@@ -268,8 +268,8 @@ CONTEXT.md         # Domain terminology glossary
 | ✅ Done | LLM provider abstraction + OpenAI implementation (Anthropic is a stub) |
 | ✅ Done | Entity/relation extraction + real-time resolution |
 | ✅ Done | Background job worker |
-| ✅ Done | Ingest pipeline orchestration (parse → chunk → embed → extract → resolve) |
-| 🔲 Next | Wiki page synthesis |
+| ✅ Done | Ingest pipeline orchestration (parse → chunk → embed → extract → resolve → enqueue wiki synthesis) |
+| ✅ Done | Wiki page synthesis (entity pages + source summaries) |
 | 🔲 Next | Hybrid retrieval |
 | 🔲 Next | FastAPI endpoints |
 | 🔲 Planned | Auth / RBAC |
