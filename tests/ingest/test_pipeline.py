@@ -26,6 +26,10 @@ from rag_wiki.providers.base import (
     CompletionResponse,
     ToolCall,
 )
+from rag_wiki.wiki.synthesis import (
+    JOB_TYPE_SYNTHESIZE_ENTITY,
+    JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,10 +85,10 @@ class FakeChatProvider:
 
 
 class FakeEmbeddingProvider:
-    """Deterministic embedding provider matching the 3072-dim Entity model."""
+    """Deterministic embedding provider matching the DB vector column."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
-        return [[0.0] * 3072 for _ in texts]
+        return [[0.0] * 2048 for _ in texts]
 
 
 class CountingFailEmbedProvider:
@@ -97,7 +101,7 @@ class CountingFailEmbedProvider:
         self.call_count += 1
         if self.call_count == 1:
             raise LLMProviderError("first embed call fails")
-        return [[0.0] * 3072 for _ in texts]
+        return [[0.0] * 2048 for _ in texts]
 
 
 # ---------------------------------------------------------------------------
@@ -189,7 +193,7 @@ async def test_ingest_pipeline_roundtrip(
     for chunk in chunks:
         assert chunk.status == ProcessingStatus.PROCESSED
         assert chunk.embedding is not None
-        assert len(chunk.embedding) == 3072
+        assert len(chunk.embedding) == 2048
 
     # Entities
     entities_result = await db.execute(select(Entity))
@@ -290,3 +294,79 @@ async def test_ingest_pipeline_partial_fail(
     entities_result = await db.execute(select(Entity))
     entities = entities_result.scalars().all()
     assert len(entities) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Synthesis job enqueue
+# ---------------------------------------------------------------------------
+
+
+async def test_ingest_enqueues_synthesis_jobs(
+    db: AsyncSession,
+    chat_provider: FakeChatProvider,
+    embed_provider: FakeEmbeddingProvider,
+    single_chunk_txt: str,
+) -> None:
+    """After a successful ingest, synthesis jobs are enqueued for each entity."""
+    job = Job(
+        job_type="ingest_document",
+        payload={"file_path": single_chunk_txt},
+    )
+    db.add(job)
+    await db.flush()
+
+    await run_ingest_pipeline(job, db, chat_provider, embed_provider)
+    await db.commit()
+
+    # Check entity synthesis jobs.
+    entity_jobs = await db.execute(
+        select(Job).where(Job.job_type == JOB_TYPE_SYNTHESIZE_ENTITY)
+    )
+    entity_job_list = entity_jobs.scalars().all()
+    assert len(entity_job_list) == 2
+    for j in entity_job_list:
+        assert j.target_entity_id is not None
+        assert j.payload is not None
+        assert "source_ids" in j.payload
+
+    # Check source summary job.
+    summary_jobs = await db.execute(
+        select(Job).where(Job.job_type == JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY)
+    )
+    summary_job_list = summary_jobs.scalars().all()
+    assert len(summary_job_list) == 1
+    assert summary_job_list[0].target_entity_id is None
+    assert "source_id" in (summary_job_list[0].payload or {})
+
+
+async def test_ingest_no_synthesis_jobs_on_all_fail(
+    db: AsyncSession,
+    chat_provider: FakeChatProvider,
+    single_chunk_txt: str,
+) -> None:
+    """When all chunks fail, no synthesis jobs are enqueued."""
+    job = Job(
+        job_type="ingest_document",
+        payload={"file_path": single_chunk_txt},
+    )
+    db.add(job)
+    await db.flush()
+
+    class FailEmbedProvider:
+        async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+            raise LLMProviderError("always fails")
+
+    with pytest.raises(IngestError):
+        await run_ingest_pipeline(job, db, chat_provider, FailEmbedProvider())
+
+    await db.commit()
+
+    entity_jobs = await db.execute(
+        select(Job).where(Job.job_type == JOB_TYPE_SYNTHESIZE_ENTITY)
+    )
+    assert len(entity_jobs.scalars().all()) == 0
+
+    summary_jobs = await db.execute(
+        select(Job).where(Job.job_type == JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY)
+    )
+    assert len(summary_jobs.scalars().all()) == 0
