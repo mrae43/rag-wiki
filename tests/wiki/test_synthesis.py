@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from unittest.mock import patch
 
+import pytest
 import sqlalchemy as sa
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,7 @@ from rag_wiki.db.models.graph import Entity
 from rag_wiki.db.models.jobs import Job
 from rag_wiki.db.models.source import Chunk, ChunkEntity, Source
 from rag_wiki.db.models.wiki import WikiPage
+from rag_wiki.exceptions import AdvisoryLockExhausted
 from rag_wiki.providers.base import (
     CompletionRequest,
     CompletionResponse,
@@ -249,19 +251,17 @@ async def test_synthesize_entity_page_creates_page(db: AsyncSession) -> None:
     assert page.slug.startswith("test-entity-")
     assert page.synthesized_from_sources == [str(source.id)]
     assert page.synthesized_at is not None
-    assert job.status == "completed"
 
 
 async def test_synthesize_entity_page_with_null_entity_id(
     db: AsyncSession,
 ) -> None:
-    """Null target_entity_id calls fail_job."""
+    """Null target_entity_id raises ValueError."""
     job = Job(
         job_type=JOB_TYPE_SYNTHESIZE_ENTITY,
         target_entity_id=None,
         payload={"source_ids": [str(uuid.uuid4())]},
         status="processing",
-        max_retries=0,
     )
     db.add(job)
     await db.flush()
@@ -269,10 +269,8 @@ async def test_synthesize_entity_page_with_null_entity_id(
     chat = ReturningChatProvider()
     embed = FakeEmbeddingProvider()
 
-    await synthesize_entity_page(job, db, chat, embed)
-
-    assert job.status == "failed"
-    assert "target_entity_id is null" in (job.error_message or "")
+    with pytest.raises(ValueError, match="target_entity_id is null"):
+        await synthesize_entity_page(job, db, chat, embed)
 
 
 async def test_synthesize_entity_page_updates_existing(db: AsyncSession) -> None:
@@ -333,13 +331,12 @@ async def test_synthesize_entity_page_updates_existing(db: AsyncSession) -> None
     assert page.content == "# Test Page\n\nGenerated content."
     assert page.slug == "test-entity-old"
     assert page.synthesized_at is not None
-    assert job.status == "completed"
 
 
 async def test_synthesize_entity_page_advisory_lock_exhausted(
     db: AsyncSession,
 ) -> None:
-    """When advisory lock cannot be acquired, job is released back to pending."""
+    """When advisory lock cannot be acquired, raises AdvisoryLockExhausted."""
     entity = Entity(name="E", entity_type="concept")
     db.add(entity)
     await db.flush()
@@ -356,15 +353,14 @@ async def test_synthesize_entity_page_advisory_lock_exhausted(
     chat = ReturningChatProvider()
     embed = FakeEmbeddingProvider()
 
-    with patch(
-        "rag_wiki.wiki.synthesis._acquire_advisory_lock_with_retry",
-        return_value=False,
+    with (
+        pytest.raises(AdvisoryLockExhausted),
+        patch(
+            "rag_wiki.wiki.synthesis._acquire_advisory_lock_with_retry",
+            return_value=False,
+        ),
     ):
         await synthesize_entity_page(job, db, chat, embed)
-
-    assert job.status == "pending"
-    assert job.claimed_at is None
-    assert job.worker_id is None
 
 
 # ---------------------------------------------------------------------------
@@ -408,13 +404,12 @@ async def test_synthesize_source_summary_creates_page(db: AsyncSession) -> None:
     assert page is not None
     assert page.entity_id is None
     assert page.content == "# Test Page\n\nGenerated content."
-    assert job.status == "completed"
 
 
 async def test_synthesize_source_summary_skips_on_llm_error(
     db: AsyncSession,
 ) -> None:
-    """LLM error -> job is completed (not re-queued) per PRD section 9."""
+    """LLM error -> returns normally (worker completes job per PRD section 9)."""
     source = Source(
         file_path="/tmp/doc.txt",
         file_name="doc.txt",
@@ -442,10 +437,10 @@ async def test_synthesize_source_summary_skips_on_llm_error(
 
     chat = FailingChatProvider()
 
+    # Function returns normally (skip behavior) — no exception raised.
     await synthesize_source_summary(job, db, chat)
 
-    assert job.status == "completed"
-
+    # No wiki page was written.
     page_result = await db.execute(select(WikiPage).where(WikiPage.title == "doc.txt"))
     page = page_result.scalar_one_or_none()
     assert page is None
@@ -454,19 +449,101 @@ async def test_synthesize_source_summary_skips_on_llm_error(
 async def test_synthesize_source_summary_missing_source_id(
     db: AsyncSession,
 ) -> None:
-    """Missing source_id in payload calls fail_job."""
+    """Missing source_id in payload raises ValueError."""
     job = Job(
         job_type=JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
         payload={},
         status="processing",
-        max_retries=0,
     )
     db.add(job)
     await db.flush()
 
     chat = ReturningChatProvider()
 
-    await synthesize_source_summary(job, db, chat)
+    with pytest.raises(ValueError, match="invalid source_id"):
+        await synthesize_source_summary(job, db, chat)
 
-    assert job.status == "failed"
-    assert "invalid source_id" in (job.error_message or "")
+
+# ---------------------------------------------------------------------------
+# Handoff tests — verify synthesis functions signal correctly for the worker
+# ---------------------------------------------------------------------------
+
+
+async def test_synthesize_entity_page_entity_not_found(
+    db: AsyncSession,
+) -> None:
+    """Entity not found raises ValueError for the worker to fail_job."""
+    entity = Entity(name="Ghost", entity_type="concept")
+    db.add(entity)
+    await db.flush()
+
+    job = Job(
+        job_type=JOB_TYPE_SYNTHESIZE_ENTITY,
+        target_entity_id=entity.id,
+        payload={"source_ids": [str(uuid.uuid4())]},
+        status="processing",
+    )
+    db.add(job)
+    await db.flush()
+
+    chat = ReturningChatProvider()
+    embed = FakeEmbeddingProvider()
+
+    # Delete the entity so the lookup fails.
+    await db.execute(sa.delete(Entity).where(Entity.id == entity.id))
+    await db.commit()
+
+    with pytest.raises(ValueError, match="Entity not found"):
+        await synthesize_entity_page(job, db, chat, embed)
+
+
+async def test_synthesize_entity_page_llm_error_skips(
+    db: AsyncSession,
+) -> None:
+    """LLM error leads to normal return (skip behavior) — no page written."""
+    entity = Entity(name="SkipTest", entity_type="concept")
+    db.add(entity)
+    await db.flush()
+
+    source = Source(
+        file_path="/tmp/skip.txt",
+        file_name="skip.txt",
+        file_type="text/plain",
+        file_size=50,
+    )
+    db.add(source)
+    await db.flush()
+
+    chunk = Chunk(
+        source_id=source.id,
+        chunk_index=0,
+        text_content="Content.",
+    )
+    db.add(chunk)
+    await db.flush()
+
+    await db.execute(
+        sa.insert(ChunkEntity).values(chunk_id=chunk.id, entity_id=entity.id)
+    )
+
+    job = Job(
+        job_type=JOB_TYPE_SYNTHESIZE_ENTITY,
+        target_entity_id=entity.id,
+        payload={"source_ids": [str(source.id)]},
+        status="processing",
+    )
+    db.add(job)
+    await db.flush()
+
+    chat = FailingChatProvider()
+    embed = FakeEmbeddingProvider()
+
+    # Should return normally (skip) — no exception.
+    await synthesize_entity_page(job, db, chat, embed)
+
+    # No wiki page was written.
+    page_result = await db.execute(
+        select(WikiPage).where(WikiPage.entity_id == entity.id)
+    )
+    page = page_result.scalar_one_or_none()
+    assert page is None
