@@ -18,6 +18,7 @@ from rag_wiki.providers.base import (
     CompletionResponse,
     EmbeddingProvider,
 )
+from rag_wiki.settings import get_settings
 from rag_wiki.wiki.synthesis import (
     JOB_TYPE_SYNTHESIZE_ENTITY,
     JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
@@ -31,7 +32,8 @@ from rag_wiki.wiki.synthesis import (
 
 class FakeEmbeddingProvider(EmbeddingProvider):
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
-        return [[0.0] * 2048 for _ in texts]
+        dims = get_settings().embedding_dimensions
+        return [[0.0] * dims for _ in texts]
 
 
 class ReturningChatProvider:
