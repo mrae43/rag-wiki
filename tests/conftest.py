@@ -120,7 +120,7 @@ class FakeEmbeddingProvider:
     """Test double that satisfies the EmbeddingProvider protocol."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
-        return [[0.0] * 1536 for _ in texts]
+        return [[0.0] * 2048 for _ in texts]
 
 
 @pytest.fixture
