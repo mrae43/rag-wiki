@@ -14,6 +14,7 @@ from rag_wiki.db.models.source import Chunk, Source
 from rag_wiki.graph.resolution import resolve_entities
 from rag_wiki.graph.schemas import ExtractedEntity, ExtractedRelation
 from rag_wiki.providers.base import CompletionRequest, CompletionResponse, ToolCall
+from rag_wiki.settings import get_settings
 
 
 class FakeChatProvider:
@@ -55,7 +56,8 @@ class FakeEmbeddingProvider:
     """Deterministic embedding provider."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
-        return [[0.0] * 2048 for _ in texts]
+        dims = get_settings().embedding_dimensions
+        return [[0.0] * dims for _ in texts]
 
 
 @pytest.fixture
@@ -129,7 +131,7 @@ async def test_resolve_entities_merges_when_llm_decides_merge(
         name="Apple Inc.",
         entity_type="organization",
         description="Tech company",
-        embedding=[0.0] * 2048,
+        embedding=[0.0] * get_settings().embedding_dimensions,
         status=PublishedStatus.PUBLISHED,
     )
     db.add(existing)
