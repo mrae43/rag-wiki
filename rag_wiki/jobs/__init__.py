@@ -125,6 +125,22 @@ async def complete_job(job: Job, db: AsyncSession) -> None:
     logger.info("job completed", job_id=str(job.id), job_type=job.job_type)
 
 
+async def release_claim_to_pending(job: Job, db: AsyncSession) -> None:
+    """Release a claimed job back to pending status.
+
+    Used when a job cannot proceed (e.g., advisory lock exhausted) but
+    should be retried rather than failed.
+
+    Args:
+        job: The job to release.
+        db: Active async SQLAlchemy session. Caller must commit.
+    """
+    job.status = "pending"
+    job.claimed_at = None
+    job.worker_id = None
+    logger.info("job released to pending", job_id=str(job.id), job_type=job.job_type)
+
+
 async def fail_job(job: Job, db: AsyncSession, error_message: str) -> None:
     """Record a job failure and either schedule a retry or mark it failed.
 
