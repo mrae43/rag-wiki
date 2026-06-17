@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime
 import enum
+import uuid
 from typing import Any
 
 import sqlalchemy as sa
@@ -37,9 +38,11 @@ class Job(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "jobs"
     __table_args__ = (
         sa.Index("idx_jobs_status_scheduled_at", "status", "scheduled_at"),
+        sa.Index("idx_jobs_target_entity_id", "target_entity_id"),
     )
 
     job_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    target_entity_id: Mapped[uuid.UUID | None] = mapped_column(sa.UUID, nullable=True)
     payload: Mapped[dict[str, Any] | None] = mapped_column(
         sa.dialects.postgresql.JSONB, nullable=True
     )

@@ -8,6 +8,7 @@ Defines the ``wiki_pages`` table (source of truth per ADR-0006) and the
 
 from __future__ import annotations
 
+import datetime
 import uuid
 from typing import TYPE_CHECKING
 
@@ -41,6 +42,12 @@ class WikiPage(Base, UUIDMixin, TimestampMixin):
         nullable=False,
         default=PublishedStatus.PUBLISHED,
         server_default=PublishedStatus.PUBLISHED,
+    )
+    synthesized_from_sources: Mapped[list[str] | None] = mapped_column(
+        sa.dialects.postgresql.JSONB, nullable=True
+    )
+    synthesized_at: Mapped[datetime.datetime | None] = mapped_column(
+        sa.DateTime(timezone=True), nullable=True
     )
 
     entity: Mapped[Entity | None] = relationship("Entity", back_populates="wiki_pages")
