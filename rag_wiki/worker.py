@@ -23,6 +23,10 @@ from rag_wiki.ingest.pipeline import run_ingest_pipeline
 from rag_wiki.jobs import claim_next, complete_job, fail_job
 from rag_wiki.providers import get_chat_provider, get_embedding_provider
 from rag_wiki.settings import get_settings
+from rag_wiki.wiki.synthesis import (
+    synthesize_entity_page,
+    synthesize_source_summary,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -67,8 +71,12 @@ async def worker_loop() -> None:
                         await run_ingest_pipeline(
                             job, db, chat_provider, embed_provider
                         )
-                    # elif job.job_type == "...":
-                    #     ...
+                    elif job.job_type == "synthesize_entity":
+                        await synthesize_entity_page(
+                            job, db, chat_provider, embed_provider
+                        )
+                    elif job.job_type == "synthesize_source_summary":
+                        await synthesize_source_summary(job, db, chat_provider)
                     else:
                         raise ValueError(f"Unknown job type: {job.job_type}")
 
