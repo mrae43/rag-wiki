@@ -439,3 +439,51 @@ async def test_wiki_page_entity_link(db: AsyncSession) -> None:
     row = result.fetchone()
     assert row is not None
     assert row[0] == 1
+
+
+# ---------------------------------------------------------------------------
+# New columns (wiki synthesis ADR)
+# ---------------------------------------------------------------------------
+
+
+async def test_wiki_pages_has_synthesized_at_column(engine: AsyncEngine) -> None:
+    """wiki_pages.synthesized_at column exists and is nullable."""
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            text(
+                "SELECT column_name, is_nullable, data_type "
+                "FROM information_schema.columns "
+                "WHERE table_schema = 'public' "
+                "AND table_name = 'wiki_pages' "
+                "AND column_name = 'synthesized_at'"
+            )
+        )
+        row = result.fetchone()
+        assert row is not None, "synthesized_at column not found"
+        assert row[1] == "YES"  # nullable
+
+
+async def test_wiki_pages_has_synthesized_from_sources_column(
+    engine: AsyncEngine,
+) -> None:
+    """wiki_pages.synthesized_from_sources column exists and is JSONB."""
+    async with engine.connect() as conn:
+        result = await conn.execute(
+            text(
+                "SELECT column_name, data_type "
+                "FROM information_schema.columns "
+                "WHERE table_schema = 'public' "
+                "AND table_name = 'wiki_pages' "
+                "AND column_name = 'synthesized_from_sources'"
+            )
+        )
+        row = result.fetchone()
+        assert row is not None, "synthesized_from_sources column not found"
+        # PostgreSQL reports JSONB as 'jsonb'
+        assert row[1] in ("jsonb",)
+
+
+async def test_jobs_has_target_entity_id_index(engine: AsyncEngine) -> None:
+    """idx_jobs_target_entity_id index exists on jobs.target_entity_id."""
+    async with engine.connect() as conn:
+        assert await _index_exists(conn, "idx_jobs_target_entity_id")
