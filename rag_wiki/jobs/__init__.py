@@ -10,6 +10,7 @@ with `SELECT FOR UPDATE SKIP LOCKED` claiming. Worker entrypoint is in rag_wiki.
 from __future__ import annotations
 
 import datetime
+import uuid
 from typing import Any
 
 import structlog
@@ -42,6 +43,7 @@ async def enqueue(
     job_type: str,
     payload: dict[str, Any] | None = None,
     scheduled_at: datetime.datetime | None = None,
+    target_entity_id: uuid.UUID | None = None,
 ) -> Job:
     """Create a new job in the queue.
 
@@ -50,6 +52,8 @@ async def enqueue(
         job_type: The type of job (e.g., ``ingest_document``).
         payload: Arbitrary JSON-serializable payload for the job.
         scheduled_at: Optional UTC datetime to delay job execution.
+        target_entity_id: Optional entity UUID for entity-targeted jobs
+            (e.g., ``synthesize_entity``).
 
     Returns:
         The newly created Job instance.
@@ -60,6 +64,7 @@ async def enqueue(
         status="pending",
         attempts=0,
         scheduled_at=scheduled_at,
+        target_entity_id=target_entity_id,
     )
     db.add(job)
     await db.flush()
