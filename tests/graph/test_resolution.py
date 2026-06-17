@@ -55,7 +55,7 @@ class FakeEmbeddingProvider:
     """Deterministic embedding provider."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
-        return [[0.0] * 3072 for _ in texts]
+        return [[0.0] * 2048 for _ in texts]
 
 
 @pytest.fixture
@@ -129,7 +129,7 @@ async def test_resolve_entities_merges_when_llm_decides_merge(
         name="Apple Inc.",
         entity_type="organization",
         description="Tech company",
-        embedding=[0.0] * 3072,
+        embedding=[0.0] * 2048,
         status=PublishedStatus.PUBLISHED,
     )
     db.add(existing)

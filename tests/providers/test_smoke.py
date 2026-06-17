@@ -40,9 +40,9 @@ async def test_fake_embedding_provider_embed(
     )
     assert isinstance(result, list)
     assert len(result) == 2
-    assert len(result[0]) == 1536
-    assert result[0] == [0.0] * 1536
-    assert result[1] == [0.0] * 1536
+    assert len(result[0]) == 2048
+    assert result[0] == [0.0] * 2048
+    assert result[1] == [0.0] * 2048
 
 
 async def test_fake_chat_provider_with_tools(mock_chat_provider: ChatProvider) -> None:
