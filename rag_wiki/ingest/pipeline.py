@@ -14,15 +14,21 @@ import mimetypes
 import os
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rag_wiki.db.models import Chunk, Job, ProcessingStatus, Source
+from rag_wiki.db.models import Chunk, ChunkEntity, Job, ProcessingStatus, Source
 from rag_wiki.exceptions import IngestError
 from rag_wiki.graph import extract_entities, resolve_entities
 from rag_wiki.ingest.parser import parse_document
 from rag_wiki.ingest.schemas import ImageChunk, ParsedChunk
+from rag_wiki.jobs import enqueue
 from rag_wiki.providers.base import ChatProvider, EmbeddingProvider
 from rag_wiki.settings import get_settings
+from rag_wiki.wiki.synthesis import (
+    JOB_TYPE_SYNTHESIZE_ENTITY,
+    JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -171,6 +177,32 @@ async def run_ingest_pipeline(
         raise IngestError(f"All chunks failed for source {source.id!r}")
     else:
         source.status = ProcessingStatus.PROCESSED
+
+        # Enqueue synthesis jobs.
+        entity_ids_result = await db.execute(
+            select(ChunkEntity.entity_id)
+            .distinct()
+            .where(
+                ChunkEntity.chunk_id.in_(
+                    select(Chunk.id).where(Chunk.source_id == source.id)
+                )
+            )
+        )
+        entity_ids = list(entity_ids_result.scalars().all())
+
+        for entity_id in entity_ids:
+            await enqueue(
+                db,
+                JOB_TYPE_SYNTHESIZE_ENTITY,
+                payload={"source_ids": [str(source.id)]},
+                target_entity_id=entity_id,
+            )
+
+        await enqueue(
+            db,
+            JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
+            payload={"source_id": str(source.id)},
+        )
 
     logger.info(
         "ingest pipeline completed",
