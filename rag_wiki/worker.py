@@ -19,8 +19,9 @@ import socket
 import structlog
 
 from rag_wiki.db.session import AsyncSessionFactory
+from rag_wiki.exceptions import AdvisoryLockExhausted
 from rag_wiki.ingest.pipeline import run_ingest_pipeline
-from rag_wiki.jobs import claim_next, complete_job, fail_job
+from rag_wiki.jobs import claim_next, complete_job, fail_job, release_claim_to_pending
 from rag_wiki.providers import get_chat_provider, get_embedding_provider
 from rag_wiki.settings import get_settings
 from rag_wiki.wiki.synthesis import (
@@ -87,6 +88,15 @@ async def worker_loop() -> None:
                         job_id=str(job.id),
                         job_type=job.job_type,
                     )
+                except AdvisoryLockExhausted:
+                    logger.warning(
+                        "job advisory lock exhausted, releasing to pending",
+                        job_id=str(job.id),
+                        job_type=job.job_type,
+                        worker_id=worker_id,
+                    )
+                    await release_claim_to_pending(job, db)
+                    await db.commit()
                 except Exception as exc:
                     # Job boundary — catch everything so a single bad job does
                     # not crash the worker loop.
