@@ -36,8 +36,8 @@ logger = structlog.get_logger(__name__)
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)))
 
-_JOB_TYPE_SYNTHESIZE_ENTITY = "synthesize_entity"
-_JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY = "synthesize_source_summary"
+JOB_TYPE_SYNTHESIZE_ENTITY = "synthesize_entity"
+JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY = "synthesize_source_summary"
 
 _ADVISORY_LOCK_DELAYS = [0.1, 0.3, 0.9]
 
@@ -141,7 +141,7 @@ async def _merge_duplicate_jobs(
 
     result = await db.execute(
         select(Job).where(
-            Job.job_type == _JOB_TYPE_SYNTHESIZE_ENTITY,
+            Job.job_type == JOB_TYPE_SYNTHESIZE_ENTITY,
             Job.target_entity_id == job.target_entity_id,
             Job.status == "pending",
             Job.id != job.id,
