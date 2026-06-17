@@ -142,7 +142,7 @@ rag_wiki/
   ingest/              # Parse → chunk → caption → embed → extract → resolve pipeline
   graph/               # extraction.py, resolution.py, merge.py, schemas.py
   retrieval/           # Hybrid retrieval (planned — only __init__.py docstring)
-  wiki/                # Wiki synthesis (planned — only __init__.py docstring)
+  wiki/                # Wiki synthesis (synthesis.py, context.py, slug.py, templates/)
   jobs/                # Job queue (enqueue, claim_next, complete_job, fail_job)
   db/
     models/              # graph.py, wiki.py, jobs.py, source.py (Chunk lives here)
