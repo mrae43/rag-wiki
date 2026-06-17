@@ -22,12 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.db.models.graph import Entity, Relation
 from rag_wiki.db.models.jobs import Job
+from rag_wiki.db.models.source import Source
 from rag_wiki.db.models.wiki import WikiPage
 from rag_wiki.exceptions import LLMProviderError
 from rag_wiki.jobs import complete_job, fail_job
 from rag_wiki.providers.base import ChatProvider, CompletionRequest, EmbeddingProvider
 from rag_wiki.settings import get_settings
-from rag_wiki.wiki.context import build_entity_context
+from rag_wiki.wiki.context import build_entity_context, build_source_summary_context
 from rag_wiki.wiki.slug import generate_slug
 
 logger = structlog.get_logger(__name__)
@@ -36,6 +37,7 @@ _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)))
 
 _JOB_TYPE_SYNTHESIZE_ENTITY = "synthesize_entity"
+_JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY = "synthesize_source_summary"
 
 _ADVISORY_LOCK_DELAYS = [0.1, 0.3, 0.9]
 
@@ -70,6 +72,64 @@ async def _release_claim_to_pending(job: Job, db: AsyncSession) -> None:
     job.status = "pending"
     job.claimed_at = None
     job.worker_id = None
+
+
+async def _cancel_duplicate_jobs(
+    db: AsyncSession,
+    job: Job,
+) -> list[uuid.UUID]:
+    """Cancel pending duplicate synthesis jobs for the same source.
+
+    Marks them as completed so the worker skips them. Unlike entity
+    synthesis coalescing, source summaries are independent per source,
+    so duplicates are simply cancelled rather than merged.
+
+    Args:
+        db: Active async SQLAlchemy session.
+        job: The current job. Other pending jobs with the same job_type
+            and source_id are cancelled.
+
+    Returns:
+        List of UUIDs of cancelled jobs.
+    """
+    payload = job.payload or {}
+    source_id_str = payload.get("source_id")
+    if not source_id_str or not isinstance(source_id_str, str):
+        return []
+
+    result = await db.execute(
+        select(Job).where(
+            Job.job_type == job.job_type,
+            Job.status == "pending",
+            Job.id != job.id,
+            Job.payload["source_id"].as_string() == source_id_str,
+        )
+    )
+    duplicates = list(result.scalars().all())
+    cancelled_ids: list[uuid.UUID] = []
+    for dup in duplicates:
+        cancelled_ids.append(dup.id)
+        dup.status = "completed"
+        dup.completed_at = datetime.datetime.now(datetime.UTC)
+
+    if duplicates:
+        logger.info(
+            "cancelled_duplicate_synthesis_jobs",
+            job_type=job.job_type,
+            source_id=source_id_str,
+            count=len(duplicates),
+        )
+
+    return cancelled_ids
+
+
+def _source_slug(source: Source) -> str:
+    """Generate a deterministic slug for a source summary wiki page.
+
+    Uses the source file name and source UUID, following the same pattern
+    as entity slug generation but without requiring an entity_id.
+    """
+    return generate_slug(source.file_name, source.id)
 
 
 async def _merge_duplicate_jobs(
@@ -304,3 +364,145 @@ async def synthesize_entity_page(
     finally:
         # Step 15: Release advisory lock.
         await _release_advisory_lock(db, lock_key)
+
+
+async def synthesize_source_summary(
+    job: Job,
+    db: AsyncSession,
+    chat_provider: ChatProvider,
+) -> None:
+    """Orchestrate source summary wiki page synthesis.
+
+    Simpler than entity synthesis — no advisory locks, no coalescing,
+    no chunk scoring.
+
+    Flow:
+      1. Cancel any duplicate pending jobs for the same source.
+      2. Fetch source + chunks + entities + relations.
+      3. Build context via ``build_source_summary_context()``.
+      4. Render Jinja2 template.
+      5. Call LLM (retried once by RetryingProvider).
+      6. Write/update WikiPage (entity_id=NULL, title=source file_name).
+      7. Mark job completed.
+
+    On transient LLM error after RetryingProvider retries: skip (log and
+    complete the job) rather than re-queueing (PRD §9).
+
+    Args:
+        job: The claimed synthesis job. Payload must contain ``source_id``.
+        db: Active async SQLAlchemy session.
+        chat_provider: LLM provider for generation.
+    """
+    payload = job.payload or {}
+    source_id_str = payload.get("source_id")
+    if not source_id_str or not isinstance(source_id_str, str):
+        await fail_job(job, db, "payload missing or invalid source_id")
+        await db.commit()
+        return
+
+    # Step 1: Cancel duplicate pending jobs for the same source.
+    await _cancel_duplicate_jobs(db, job)
+    await db.commit()
+
+    try:
+        # Step 2: Fetch source.
+        source_result = await db.execute(
+            select(Source).where(Source.id == uuid.UUID(source_id_str))
+        )
+        source = source_result.scalar_one_or_none()
+        if source is None:
+            logger.error(
+                "source_not_found",
+                source_id=source_id_str,
+                job_id=str(job.id),
+            )
+            await fail_job(job, db, f"Source not found: {source_id_str}")
+            await db.commit()
+            return
+
+        # Step 3: Build context.
+        context = await build_source_summary_context(
+            source=source,
+            db=db,
+            chat_provider=chat_provider,
+        )
+
+        # Step 4: Render Jinja2 template.
+        template = _jinja_env.get_template("synthesize_source_summary.j2")
+        prompt = template.render(**context)
+
+        # Step 5: Call LLM (RetryingProvider handles transient retries).
+        settings = get_settings()
+        request = CompletionRequest(
+            system=prompt,
+            messages=[],
+            model=settings.llm_model_wiki_synthesis,
+            temperature=0.3,
+        )
+
+        try:
+            response = await chat_provider.complete(request)
+        except LLMProviderError:
+            logger.error(
+                "source_summary_llm_error_skipping",
+                source_id=source_id_str,
+                job_id=str(job.id),
+            )
+            # Skip: complete the job rather than re-queueing (PRD §9).
+            await complete_job(job, db)
+            await db.commit()
+            return
+
+        generated_content = response.content or ""
+        if not generated_content:
+            logger.warning(
+                "source_summary_empty_response",
+                source_id=source_id_str,
+                job_id=str(job.id),
+            )
+            generated_content = (
+                f"# {source.file_name}\n\n*Synthesis produced no content.*"
+            )
+
+        # Step 6: Write/update WikiPage (entity_id=NULL for source pages).
+        slug = _source_slug(source)
+        now = datetime.datetime.now(datetime.UTC)
+
+        page_result = await db.execute(select(WikiPage).where(WikiPage.slug == slug))
+        existing_page = page_result.scalar_one_or_none()
+
+        if existing_page:
+            existing_page.content = generated_content
+            existing_page.synthesized_from_sources = [source_id_str]
+            existing_page.synthesized_at = now
+        else:
+            page = WikiPage(
+                entity_id=None,
+                title=source.file_name,
+                slug=slug,
+                content=generated_content,
+                synthesized_from_sources=[source_id_str],
+                synthesized_at=now,
+            )
+            db.add(page)
+
+        # Step 7: Mark job completed.
+        await complete_job(job, db)
+        await db.commit()
+
+        logger.info(
+            "source_summary_synthesized",
+            source_id=source_id_str,
+            file_name=source.file_name,
+            job_id=str(job.id),
+        )
+
+    except Exception:
+        logger.error(
+            "source_summary_synthesis_failed",
+            source_id=source_id_str,
+            job_id=str(job.id),
+            exc_info=True,
+        )
+        await fail_job(job, db, "Unexpected error during source summary synthesis")
+        await db.commit()
