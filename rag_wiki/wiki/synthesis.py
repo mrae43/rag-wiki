@@ -24,8 +24,7 @@ from rag_wiki.db.models.graph import Entity, Relation
 from rag_wiki.db.models.jobs import Job
 from rag_wiki.db.models.source import Source
 from rag_wiki.db.models.wiki import WikiPage
-from rag_wiki.exceptions import LLMProviderError
-from rag_wiki.jobs import complete_job, fail_job
+from rag_wiki.exceptions import AdvisoryLockExhausted, LLMProviderError
 from rag_wiki.providers.base import ChatProvider, CompletionRequest, EmbeddingProvider
 from rag_wiki.settings import get_settings
 from rag_wiki.wiki.context import build_entity_context, build_source_summary_context
@@ -66,12 +65,6 @@ async def _release_advisory_lock(db: AsyncSession, lock_key: int) -> None:
         text("SELECT pg_advisory_unlock(:lock_key)"),
         {"lock_key": lock_key},
     )
-
-
-async def _release_claim_to_pending(job: Job, db: AsyncSession) -> None:
-    job.status = "pending"
-    job.claimed_at = None
-    job.worker_id = None
 
 
 async def _cancel_duplicate_jobs(
@@ -176,13 +169,16 @@ async def synthesize_entity_page(
 ) -> None:
     """Orchestrate entity wiki page synthesis.
 
+    Does NOT manage job lifecycle — the caller (worker) handles
+    complete_job / fail_job.  Exceptions signal outcomes to the caller.
+
     Implements the PRD section-11 worker flow:
       1. (Job is already claimed by the worker loop.)
       2. Query for pending duplicates.
       3. Merge their source_ids into claimed payload; mark duplicates completed.
       4. COMMIT (steps 2-3 as one transaction).
       5. Acquire PG advisory lock on entity_id hash.
-      6. Retry with exponential backoff.  If exhausted: release claim -> pending.
+      6. Retry with exponential backoff.  If exhausted: raise AdvisoryLockExhausted.
       7. Re-read current WikiPage inside advisory lock.
       8. Fetch the entity.
       9. Build context via ``context.build_entity_context()``.
@@ -192,7 +188,6 @@ async def synthesize_entity_page(
      13. Write / update WikiPage row.
      14. Populate ``wiki_page_entities`` join table (graph-based).
      15. Release advisory lock.
-     16. Mark job completed.
 
     Args:
         job: The claimed synthesis job.  Must have ``target_entity_id`` set
@@ -200,12 +195,14 @@ async def synthesize_entity_page(
         db: Active async SQLAlchemy session.
         chat_provider: LLM provider for generation.
         embed_provider: Embedding provider for chunk scoring.
+
+    Raises:
+        AdvisoryLockExhausted: When advisory lock retries are exhausted.
+        ValueError: When target_entity_id is null or entity is not found.
     """
     entity_id = job.target_entity_id
     if entity_id is None:
-        await fail_job(job, db, "target_entity_id is null")
-        await db.commit()
-        return
+        raise ValueError("target_entity_id is null")
 
     # Steps 2-4: Merge duplicate jobs and commit as one transaction.
     merged_source_ids = await _merge_duplicate_jobs(job, db)
@@ -220,9 +217,7 @@ async def synthesize_entity_page(
             entity_id=str(entity_id),
             job_id=str(job.id),
         )
-        await _release_claim_to_pending(job, db)
-        await db.commit()
-        return
+        raise AdvisoryLockExhausted(f"Advisory lock exhausted for entity {entity_id}")
 
     try:
         # Step 7: Re-read current WikiPage inside advisory lock.
@@ -241,9 +236,7 @@ async def synthesize_entity_page(
                 entity_id=str(entity_id),
                 job_id=str(job.id),
             )
-            await fail_job(job, db, f"Entity not found: {entity_id}")
-            await db.commit()
-            return
+            raise ValueError(f"Entity not found: {entity_id}")
 
         source_uuids = [uuid.UUID(sid) for sid in merged_source_ids]
 
@@ -269,7 +262,21 @@ async def synthesize_entity_page(
             model=settings.llm_model_wiki_synthesis,
             temperature=0.3,
         )
-        response = await chat_provider.complete(request)
+
+        # Inner try/except for LLM skip behavior per PRD §9.
+        try:
+            response = await chat_provider.complete(request)
+        except LLMProviderError:
+            logger.error(
+                "llm_error_skipping_synthesis",
+                entity_id=str(entity_id),
+                job_id=str(job.id),
+                exc_info=True,
+            )
+            # Skip — return normally so the worker completes the job
+            # without writing a page. The entity's data is already in
+            # the graph; the page can be regenerated later.
+            return
 
         # Step 12: Extract content from LLM response.
         generated_content = response.content or ""
@@ -331,10 +338,6 @@ async def synthesize_entity_page(
                 {"page_id": existing_row.id, "entity_id": eid},
             )
 
-        # Step 16: Mark job completed.
-        await complete_job(job, db)
-        await db.commit()
-
         logger.info(
             "entity_page_synthesized",
             entity_id=str(entity_id),
@@ -343,15 +346,6 @@ async def synthesize_entity_page(
             is_update=existing_content is not None,
         )
 
-    except LLMProviderError:
-        logger.error(
-            "llm_provider_error",
-            entity_id=str(entity_id),
-            job_id=str(job.id),
-            exc_info=True,
-        )
-        await fail_job(job, db, "LLM provider error during synthesis")
-        await db.commit()
     except Exception:
         logger.error(
             "synthesis_failed",
@@ -359,8 +353,7 @@ async def synthesize_entity_page(
             job_id=str(job.id),
             exc_info=True,
         )
-        await fail_job(job, db, "Unexpected error during synthesis")
-        await db.commit()
+        raise
     finally:
         # Step 15: Release advisory lock.
         await _release_advisory_lock(db, lock_key)
@@ -373,6 +366,9 @@ async def synthesize_source_summary(
 ) -> None:
     """Orchestrate source summary wiki page synthesis.
 
+    Does NOT manage job lifecycle — the caller (worker) handles
+    complete_job / fail_job.  Exceptions signal outcomes to the caller.
+
     Simpler than entity synthesis — no advisory locks, no coalescing,
     no chunk scoring.
 
@@ -383,22 +379,22 @@ async def synthesize_source_summary(
       4. Render Jinja2 template.
       5. Call LLM (retried once by RetryingProvider).
       6. Write/update WikiPage (entity_id=NULL, title=source file_name).
-      7. Mark job completed.
 
     On transient LLM error after RetryingProvider retries: skip (log and
-    complete the job) rather than re-queueing (PRD §9).
+    return normally) rather than re-queueing (PRD §9).
 
     Args:
         job: The claimed synthesis job. Payload must contain ``source_id``.
         db: Active async SQLAlchemy session.
         chat_provider: LLM provider for generation.
+
+    Raises:
+        ValueError: When payload has no source_id or source is not found.
     """
     payload = job.payload or {}
     source_id_str = payload.get("source_id")
     if not source_id_str or not isinstance(source_id_str, str):
-        await fail_job(job, db, "payload missing or invalid source_id")
-        await db.commit()
-        return
+        raise ValueError("payload missing or invalid source_id")
 
     # Step 1: Cancel duplicate pending jobs for the same source.
     await _cancel_duplicate_jobs(db, job)
@@ -416,9 +412,7 @@ async def synthesize_source_summary(
                 source_id=source_id_str,
                 job_id=str(job.id),
             )
-            await fail_job(job, db, f"Source not found: {source_id_str}")
-            await db.commit()
-            return
+            raise ValueError(f"Source not found: {source_id_str}")
 
         # Step 3: Build context.
         context = await build_source_summary_context(
@@ -448,9 +442,8 @@ async def synthesize_source_summary(
                 source_id=source_id_str,
                 job_id=str(job.id),
             )
-            # Skip: complete the job rather than re-queueing (PRD §9).
-            await complete_job(job, db)
-            await db.commit()
+            # Skip per PRD §9 — return normally so the worker completes
+            # the job without writing a page.
             return
 
         generated_content = response.content or ""
@@ -486,10 +479,6 @@ async def synthesize_source_summary(
             )
             db.add(page)
 
-        # Step 7: Mark job completed.
-        await complete_job(job, db)
-        await db.commit()
-
         logger.info(
             "source_summary_synthesized",
             source_id=source_id_str,
@@ -504,5 +493,4 @@ async def synthesize_source_summary(
             job_id=str(job.id),
             exc_info=True,
         )
-        await fail_job(job, db, "Unexpected error during source summary synthesis")
-        await db.commit()
+        raise

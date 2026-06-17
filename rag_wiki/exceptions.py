@@ -26,6 +26,10 @@ class ExtractionError(RagWikiError):
     """Raised when entity/relation extraction fails or returns invalid data."""
 
 
+class AdvisoryLockExhausted(RagWikiError):
+    """Raised when PG advisory lock retries are exhausted during synthesis."""
+
+
 class IngestError(RagWikiError):
     """Raised when a source document cannot be processed."""
 

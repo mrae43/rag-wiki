@@ -311,7 +311,31 @@ async def build_entity_context(
         entry[1] for entry in chunk_entries if entry[0] in selected_text_set
     ]
 
-    # Tier 5: 1-hop neighbors (wiki link binding) — only if room.
+    # String-match pre-scan (PRD §5 Tier 5): find entities mentioned in chunk
+    # text but without explicit relation edges.  Query all entities from the
+    # relevant sources and check if their name appears in selected chunk text.
+    # Temporarily disable autoflush to avoid flushing dirty chunk embeddings.
+    if source_ids and source_chunks:
+        db.autoflush = False
+        try:
+            all_source_entities = await db.execute(
+                sa.select(Entity)
+                .join(ChunkEntity, Entity.id == ChunkEntity.entity_id)
+                .join(Chunk, Chunk.id == ChunkEntity.chunk_id)
+                .where(Chunk.source_id.in_(source_ids))
+                .distinct(),
+            )
+        finally:
+            db.autoflush = True
+        chunk_text_lower = [ct.lower() for ct in selected_texts]
+        for ent in all_source_entities.scalars().all():
+            if ent.id not in neighbor_entities:
+                entity_name_lower = ent.name.lower()
+                if any(entity_name_lower in ctl for ctl in chunk_text_lower):
+                    neighbor_entities[ent.id] = ent
+
+    # Tier 5: 1-hop neighbors + string-match entities (wiki link binding) —
+    # only if room.
     used_by_chunks = sum(_estimate_tokens(t) for t in selected_texts)
     neighbor_budget = remaining_budget - used_by_chunks
 
