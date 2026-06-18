@@ -4,8 +4,9 @@ rag_wiki.retrieval.traversal
 Recursive CTE graph traversal for the retrieval pipeline.
 
 A raw SQL recursive CTE (per coding standards §7.3) walks relations
-bidirectionally from seed entities. Results are loaded into ORM objects
-and truncated in Python to respect per-hop and total-node limits.
+bidirectionally from seed entities. Results are truncated at the entity-ID
+level before ORM loading, then degree-ranked and total-node limited in
+Python.
 """
 
 from __future__ import annotations
@@ -100,6 +101,18 @@ async def traverse(
     if not non_seed_ids:
         return TraversalResult(entities=[], relations=[], hop_map=all_hops)
 
+    # Apply per-hop neighbor limit at the ID level before ORM loading to avoid
+    # pulling huge dense neighborhoods into memory.
+    max_per_hop = settings.retrieval_max_neighbors_per_hop
+    hop_buckets: dict[int, list[uuid.UUID]] = {}
+    for eid in non_seed_ids:
+        hop = all_hops[eid]
+        hop_buckets.setdefault(hop, []).append(eid)
+
+    limited_ids: list[uuid.UUID] = []
+    for hop in sorted(hop_buckets):
+        limited_ids.extend(hop_buckets[hop][:max_per_hop])
+
     # Load full entity objects with relations.
     result = await db.execute(
         sa.select(Entity)
@@ -107,11 +120,13 @@ async def traverse(
             joinedload(Entity.outgoing_relations).joinedload(Relation.target_entity),
             joinedload(Entity.incoming_relations).joinedload(Relation.source_entity),
         )
-        .where(Entity.id.in_(non_seed_ids))
+        .where(Entity.id.in_(limited_ids))
     )
     all_entities = list(result.unique().scalars().all())
 
-    # Enforce per-hop neighbor limit.
+    # Rank each hop by degree descending. The per-hop ceiling was already
+    # applied at the ID level before ORM loading; this step keeps the
+    # degree-based ordering consistent with the documented behavior.
     max_per_hop = settings.retrieval_max_neighbors_per_hop
     hop_groups: dict[int, list[Entity]] = {}
     for ent in all_entities:
