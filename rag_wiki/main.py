@@ -52,9 +52,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         yield
 
     app = FastAPI(
-        title="RagWiki",
+        title="RagWiki API",
         description="LLM-maintained knowledge wiki API",
         version="0.1.0",
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
         lifespan=_lifespan,
     )
     app.state.settings = settings
