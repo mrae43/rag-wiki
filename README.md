@@ -55,7 +55,7 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 **Three operations drive everything:**
 
 - **Ingest** ✅ — parse source → extract chunks → caption non-text → embed → extract entities/relations → resolve against existing graph → synthesize/update wiki pages for every entity and source
-- **Query** 🔲 — Retrieval engine built (vector seed → graph traversal → context assembly). Answer synthesis and API endpoint are not yet implemented.
+- **Query** ✅ — hybrid retrieval (vector seed → graph traversal → context assembly) with optional LLM-generated answer via `POST /api/v1/queries`
 - **Lint** 🔲 — periodic health check: find duplicate entities, contradictions, orphan pages, stale claims, missing cross-references
 
 See `docs/adr/` for all architectural decisions and their rationale.
@@ -154,11 +154,59 @@ The job is queued and processed in the background. Check the worker logs for pro
 
 ### 5. Query the wiki
 
-> 🔲 **Querying is not yet implemented.** The FastAPI endpoints are still under development. You can query the database directly via SQL or the CLI (coming soon).
+Ask a question over the wiki using the FastAPI endpoint:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/queries \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What are the key findings?", "generate_answer": true}'
+```
+
+Set `generate_answer: false` to retrieve structured context without spending
+tokens on an LLM answer. See `docs/api.md` for the full endpoint reference.
 
 ### 6. Export to Obsidian (optional)
 
 > 🔲 **Export is not yet implemented.** The CLI stub exists but exits immediately. `rag-wiki export --output ./wiki` will render `.md` files for Obsidian.
+
+---
+
+## API
+
+The RagWiki HTTP API is built with FastAPI and mounted at `/api/v1`. It is
+unauthenticated in v1 and intended to run inside a trusted network or behind
+an existing gateway.
+
+### Running the API
+
+With Docker Compose:
+
+```bash
+docker compose up
+```
+
+Or directly with `uvicorn`:
+
+```bash
+uv run uvicorn rag_wiki.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_HOST` | `0.0.0.0` | Bind host |
+| `API_PORT` | `8000` | Bind port |
+| `UPLOAD_DIR` | `./uploads` | Directory for uploaded source files |
+| `UPLOAD_MAX_FILE_SIZE_BYTES` | `104857600` | Maximum upload size (100 MB) |
+| `CORS_ORIGINS` | `""` | Comma-separated allowed origins |
+
+### Documentation
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+- OpenAPI JSON: `http://localhost:8000/openapi.json`
+- Full reference: `docs/api.md`
 
 ---
 
@@ -228,6 +276,7 @@ rag_wiki/
   cli.py           # CLI (rag-wiki export, ...)
   settings.py      # Pydantic-settings config
   exceptions.py    # Domain exception hierarchy
+  api/             # FastAPI routes, schemas, middleware, dependencies
   providers/       # LLMProvider implementations (base.py, openai.py)
   ingest/
     pipeline.py    # Full ingestion orchestrator
@@ -258,7 +307,8 @@ rag_wiki/
     base.py        # Declarative base
 tests/             # Mirrors rag_wiki/ structure
 docs/
-  adr/             # Architecture Decision Records (ADR-0001 to ADR-0012)
+  adr/             # Architecture Decision Records (ADR-0001 to ADR-0013)
+  api.md           # HTTP API reference
   coding-standards.md
   tech-stack.md
   agent-harness.md
@@ -287,7 +337,7 @@ CONTEXT.md         # Domain terminology glossary
 | ✅ Done | Ingest pipeline orchestration (parse → chunk → embed → extract → resolve → enqueue wiki synthesis) |
 | ✅ Done | Hybrid retrieval (vector seed → graph traversal → context assembly) |
 | ✅ Done | Wiki page synthesis (entity pages + source summaries) |
-| 🔲 Next | FastAPI endpoints |
+| ✅ Done | FastAPI endpoints |
 | 🔲 Planned | Auth / RBAC |
 | 🔲 Planned | Observability (structured logging, metrics) |
 | 🔲 Planned | Lint operation (periodic graph health check) |
