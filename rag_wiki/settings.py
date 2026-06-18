@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -57,6 +58,9 @@ class Settings(BaseSettings):
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    upload_dir: Path = Path("./uploads")
+    upload_max_file_size_bytes: int = 104_857_600
+    cors_origins: str = ""
 
     # Logging
     log_level: str = "INFO"
