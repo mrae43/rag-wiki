@@ -39,5 +39,5 @@ def test_settings_defaults() -> None:
 
 
 def test_fastapi_app_creates() -> None:
-    assert fastapi_app.title == "RagWiki"
+    assert fastapi_app.title == "RagWiki API"
     assert fastapi_app is not None

@@ -20,7 +20,12 @@ from rag_wiki.api.dependencies import get_db
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=dict[str, str])
+@router.get(
+    "/health",
+    response_model=dict[str, str],
+    operation_id="health_check",
+    summary="Health check",
+)
 async def health_check(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:
