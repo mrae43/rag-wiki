@@ -13,7 +13,7 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 
 - **Multimodal ingestion** — text, tables, and images parsed into typed chunks (lightweight by default; optional MinerU-backed full multimodal path)
 - **Knowledge graph** — entities and relations extracted from every chunk, stored as plain relational tables in Postgres with real-time entity resolution
-- **Hybrid retrieval** — *planned* — vector similarity (pgvector) will seed a graph traversal (recursive CTE) for richer, context-aware answers
+- **Hybrid retrieval** — vector similarity (pgvector) seeds a graph traversal (recursive CTE) for richer, context-aware answers
 - **LLM-maintained wiki** — markdown pages synthesized and kept current in Postgres during ingestion; optional export to a directory of `.md` files for Obsidian browsing is planned
 - **Pluggable LLM providers** — OpenAI (fully implemented); Anthropic, Azure OpenAI, vLLM, and Ollama are config variants on the OpenAI-compatible path — swap by config, no code changes
 - **Single Postgres backend** — vectors, knowledge graph, job queue, and wiki pages all in one database; no Redis, no Neo4j, no separate vector store
@@ -26,38 +26,36 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 ## Architecture
 
 ```
-                        ┌─────────────────────────────────────┐
-                        │           PostgreSQL 16+             │
-  Raw documents         │                                      │
-  (PDF, MD, DOCX, ...)  │  ┌──────────┐   ┌───────────────┐  │
-        │               │  │  chunks  │   │  entities     │  │
-        ▼               │  │ +embedding│  │  +relations   │  │
-  ┌──────────┐  ingest  │  └──────────┘   └───────────────┘  │
-  │  Parser  │─────────▶│                                      │
-  │ (hybrid) │          │  ┌──────────┐   ┌───────────────┐  │
-  └──────────┘          │  │   jobs   │   │  wiki_pages   │  │
-                        │  │  (queue) │   │  (markdown)   │  │
-  Query                 │  └──────────┘   └───────────────┘  │
-     │                  └──────────────────────┬──────────────┘
-     ▼                                         │
-   ┌──────────────────┐                        │
-   │ Hybrid Retrieval │◀────────────────────────┘
-   │ vector seed +    │
-   │ graph traversal  │
-   └────────┬─────────┘
-            │
-            ▼
-   ┌──────────────────┐        ┌──────────────────┐
-   │   LLMProvider    │        │   Wiki Synthesis  │
-   │ (OpenAI / Anthr  │        │  (LLM-maintained  │
-   │  / vLLM / Ollama)│        │   wiki_pages)     │
-   └──────────────────┘        └──────────────────┘
+  Raw documents                                        Query
+  (PDF, MD, DOCX, ...)                                   │
+        │                                                ▼
+        ▼                                     ┌──────────────────┐
+  ┌──────────┐                                │   LLMProvider    │
+  │  Parser  │                                │ (OpenAI / Anthr  │
+  │ (hybrid) │                                │  / vLLM / Ollama)│
+  └────┬─────┘                                └────────┬─────────┘
+       │                                               │
+       ▼                                               │
+  ┌─────────────────────────────────────────────────────────────┐
+  │                    PostgreSQL 16+                            │
+  │                                                              │
+  │  ┌──────────┐   ┌───────────────┐   ┌────────────────────┐  │
+  │  │  chunks  │   │  entities     │   │  Hybrid Retrieval  │  │
+  │  │ +embedding│  │  +relations   │   │  vector seed  →    │  │
+  │  └──────────┘   └───────────────┘   │  graph traversal   │  │
+  │                                      │  → context assembly│  │
+  │  ┌──────────┐   ┌───────────────┐   └────────────────────┘  │
+  │  │   jobs   │──▶│  worker       │───▶  ┌───────────────┐    │
+  │  │  (queue) │   │  (claim +     │    │  wiki_pages   │    │
+  │  └──────────┘   │   synthesize) │    │  (markdown)   │    │
+  │                  └───────────────┘    └───────────────┘    │
+  └─────────────────────────────────────────────────────────────┘
 ```
 
 **Three operations drive everything:**
 
 - **Ingest** ✅ — parse source → extract chunks → caption non-text → embed → extract entities/relations → resolve against existing graph → synthesize/update wiki pages for every entity and source
-- **Query** 🔲 — vector search for seed chunks/entities → graph traversal for context → LLM answer synthesis → optionally file answer back into wiki
+- **Query** 🔲 — Retrieval engine built (vector seed → graph traversal → context assembly). Answer synthesis and API endpoint are not yet implemented.
 - **Lint** 🔲 — periodic health check: find duplicate entities, contradictions, orphan pages, stale claims, missing cross-references
 
 See `docs/adr/` for all architectural decisions and their rationale.
@@ -107,7 +105,8 @@ cp .env.example .env
 Edit `.env` — at minimum set:
 
 ```env
-LLM_PROVIDER=openai                          # openai | anthropic | openai_compatible
+DATABASE_URL=postgresql+asyncpg://rag_wiki:rag_wiki@db:5432/rag_wiki
+LLM_PROVIDER=openai                          # openai | anthropic
 LLM_API_KEY=sk-...
 LLM_MODEL_EXTRACTION=gpt-4o-mini
 LLM_MODEL_WIKI_SYNTHESIS=gpt-4o
@@ -115,6 +114,9 @@ LLM_MODEL_QUERY=gpt-4o
 EMBEDDING_MODEL=text-embedding-3-small
 EMBEDDING_DIMENSIONS=3072
 ```
+
+See `.env.example` for the full list of 30+ config options (per-operation model
+selection, entity resolution, retrieval parameters, logging, etc.).
 
 ### 2. Start the stack
 
@@ -156,7 +158,7 @@ The job is queued and processed in the background. Check the worker logs for pro
 
 ### 6. Export to Obsidian (optional)
 
-> 🔲 **Export is not yet implemented.** The CLI stub exists but exits immediately. Once wiki synthesis is built, `rag-wiki export --output ./wiki` will render `.md` files for Obsidian.
+> 🔲 **Export is not yet implemented.** The CLI stub exists but exits immediately. `rag-wiki export --output ./wiki` will render `.md` files for Obsidian.
 
 ---
 
@@ -226,7 +228,7 @@ rag_wiki/
   cli.py           # CLI (rag-wiki export, ...)
   settings.py      # Pydantic-settings config
   exceptions.py    # Domain exception hierarchy
-  providers/       # LLMProvider implementations
+  providers/       # LLMProvider implementations (base.py, openai.py)
   ingest/
     pipeline.py    # Full ingestion orchestrator
     parser.py      # MIME-based routing into parsing backends
@@ -238,18 +240,32 @@ rag_wiki/
     schemas.py     # Graph models (Entity, Relation, etc.)
     resolution.py  # Real-time entity resolution (embedding + LLM merge)
     merge.py       # Hard merge of duplicate entities with FK repointing
-  retrieval/       # Hybrid retrieval (seed, traverse, assemble) — 🔲 planned
-  wiki/            # Wiki page synthesis and export — 🔲 planned
+  retrieval/       # Hybrid retrieval (seed, traverse, assemble)
+    seeds.py       # Vector search seed finding
+    traversal.py   # Recursive CTE graph traversal
+    context.py     # Token-budgeted context assembly
+    scoring.py     # Result scoring and deduplication
+    schemas.py     # RetrievalResult, ContextWindow, etc.
+  wiki/            # Wiki page synthesis
+    synthesis.py   # Entity page + source summary orchestration
+    context.py     # 5-tier context construction
+    slug.py        # Deterministic URL-safe slug generation
+    templates/     # Jinja2 templates (synthesize_entity.j2, ...)
   jobs/            # Job queue (enqueue, claim, complete, fail)
   db/
-    models/        # graph.py, wiki.py, jobs.py, source.py (Chunk lives here)
+    models/        # graph.py, wiki.py, jobs.py, source.py, index.py (Chunk lives here)
     session.py     # Async session factory
     base.py        # Declarative base
 tests/             # Mirrors rag_wiki/ structure
 docs/
-  adr/             # Architecture Decision Records (ADR-0001 to ADR-0010)
+  adr/             # Architecture Decision Records (ADR-0001 to ADR-0012)
   coding-standards.md
   tech-stack.md
+  agent-harness.md
+  harness-engineering.md
+  llm-wiki.md
+  docs-convention.md
+  prd/             # Product Requirement Documents (6 PRDs)
 AGENTS.md          # Guidance for LLM coding agents (Claude Code, OpenCode, etc.)
 CONTEXT.md         # Domain terminology glossary
 ```
@@ -260,7 +276,7 @@ CONTEXT.md         # Domain terminology glossary
 
 | Status | Item |
 |---|---|
-| ✅ Done | Architecture decisions (10 ADRs) |
+| ✅ Done | Architecture decisions (12 ADRs) |
 | ✅ Done | Coding standards, tech stack, agent guidance |
 | ✅ Done | Database schema + Alembic migrations |
 | ✅ Done | Lightweight parsing pipeline |
@@ -269,8 +285,8 @@ CONTEXT.md         # Domain terminology glossary
 | ✅ Done | Entity/relation extraction + real-time resolution |
 | ✅ Done | Background job worker |
 | ✅ Done | Ingest pipeline orchestration (parse → chunk → embed → extract → resolve → enqueue wiki synthesis) |
+| ✅ Done | Hybrid retrieval (vector seed → graph traversal → context assembly) |
 | ✅ Done | Wiki page synthesis (entity pages + source summaries) |
-| 🔲 Next | Hybrid retrieval |
 | 🔲 Next | FastAPI endpoints |
 | 🔲 Planned | Auth / RBAC |
 | 🔲 Planned | Observability (structured logging, metrics) |

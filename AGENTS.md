@@ -82,7 +82,7 @@ Also set `LLM_PROVIDER` (chat) and `LLM_EMBEDDING_PROVIDER` (embeddings),
 
 **Postgres-native job queue** — a `jobs` table with `SELECT FOR UPDATE SKIP
 LOCKED` claiming, behind the interface `enqueue()` / `claim_next()` /
-`complete_job()` / `fail_job()`. Not Celery/RQ. Worker: `python -m rag_wiki.worker`.
+`complete_job()` / `fail_job()` / `release_claim_to_pending()`. Not Celery/RQ. Worker: `python -m rag_wiki.worker`.
 The interface is designed so a future Celery/RQ migration is additive, not a
 rewrite. (ADR-0005)
 
@@ -93,7 +93,7 @@ Auth/RBAC is scoped to users within one organization's deployment. (ADR-0004)
 optional MinerU path via `uv pip install rag-wiki[mineru]`, feature-flagged. Both
 paths produce the same chunk interface. (ADR-0002)
 
-**Hybrid retrieval, single mode for v1** — vector search seeds → recursive CTE
+**Hybrid retrieval, single mode for v1** ✅ — vector search seeds → recursive CTE
 graph traversal → combined context. No multiple selectable modes in v1, but
 seed-finding / traversal / context assembly are separate internal steps.
 (ADR-0009)
@@ -122,6 +122,8 @@ only, not defer-all-to-batch. (ADR-0008)
 | 0008 | Entity resolution | Real-time (embedding + LLM) + periodic lint |
 | 0009 | Retrieval | Hybrid single-mode (vector seed + graph traversal) |
 | 0010 | Ingestion workflow | Fully automated; `status` column for future review queue |
+| 0011 | Parsing | MinerU primary parser (deferred); lightweight is default |
+| 0012 | Retrieval | Hybrid retrieval implementation — vector seed + CTE traversal + context assembly |
 
 ---
 
@@ -131,7 +133,7 @@ only, not defer-all-to-batch. (ADR-0008)
 rag_wiki/
   main.py              # FastAPI app (entrypoint: rag_wiki.main:app)
   worker.py            # Job worker entrypoint (python -m rag_wiki.worker)
-  cli.py               # CLI commands (rag-wiki export, ...)
+  cli.py               # CLI commands (rag-wiki ingest, rag-wiki export, ...)
   settings.py          # pydantic-settings config (all env vars)
   exceptions.py        # Domain exception hierarchy rooted in RagWikiError
   providers/           # ChatProvider + EmbeddingProvider implementations
@@ -141,11 +143,11 @@ rag_wiki/
     __init__.py          # Retry wrapper, provider registry, get_chat_provider()
   ingest/              # Parse → chunk → caption → embed → extract → resolve pipeline
   graph/               # extraction.py, resolution.py, merge.py, schemas.py
-  retrieval/           # Hybrid retrieval (planned — only __init__.py docstring)
+  retrieval/           # Hybrid retrieval (seeds.py, traversal.py, context.py, scoring.py, schemas.py)
   wiki/                # Wiki synthesis (synthesis.py, context.py, slug.py, templates/)
   jobs/                # Job queue (enqueue, claim_next, complete_job, fail_job)
   db/
-    models/              # graph.py, wiki.py, jobs.py, source.py (Chunk lives here)
+    models/              # graph.py, wiki.py, jobs.py, source.py, index.py (Chunk lives here)
     session.py           # Async session factory
     base.py              # Declarative base, UUIDMixin, TimestampMixin
 tests/
