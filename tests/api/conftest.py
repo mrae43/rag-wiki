@@ -13,8 +13,10 @@ engine must remain lazy until after the migration tests, which drop tables.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -63,9 +65,15 @@ async def api_client(
     db: AsyncSession,
     mock_chat_provider: object,
     mock_embedding_provider: object,
+    tmp_path: Path,
 ) -> AsyncGenerator[AsyncClient, None]:
     """Return an httpx.AsyncClient for a test app with dependencies overridden."""
     settings = Settings.model_validate(get_settings())
+    settings.upload_dir = tmp_path / "uploads"
+    settings.upload_max_file_size_bytes = 1024 * 1024  # 1 MB for most tests
+    await asyncio.to_thread(
+        lambda: settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    )
     app = create_app(settings)
 
     async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:

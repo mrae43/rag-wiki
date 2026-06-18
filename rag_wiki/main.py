@@ -11,6 +11,10 @@ Does NOT include the worker loop — that lives in rag_wiki.worker.
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -39,11 +43,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if settings is None:
         settings = get_settings()
 
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+        """Create the upload directory on startup."""
+        await asyncio.to_thread(
+            lambda: settings.upload_dir.mkdir(parents=True, exist_ok=True)
+        )
+        yield
+
     app = FastAPI(
         title="RagWiki",
         description="LLM-maintained knowledge wiki API",
         version="0.1.0",
+        lifespan=_lifespan,
     )
+    app.state.settings = settings
 
     add_request_id_middleware(app)
     add_cors_middleware(app, settings.cors_origins)

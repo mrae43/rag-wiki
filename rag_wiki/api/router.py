@@ -11,10 +11,12 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from rag_wiki.api.routes import health
+from rag_wiki.api.routes import health, job, source
 
 api_router = APIRouter()
 api_router.include_router(health.router)
 
 v1_router = APIRouter(prefix="/api/v1")
+v1_router.include_router(source.router)
+v1_router.include_router(job.router)
 api_router.include_router(v1_router)

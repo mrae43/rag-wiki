@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import mimetypes
 import os
+import uuid
 
 import structlog
 from sqlalchemy import select
@@ -57,25 +58,44 @@ async def run_ingest_pipeline(
         raise IngestError(f"Job payload missing file_path: job_id={job.id}")
 
     source_meta = payload.get("source_metadata")
+    source_id = payload.get("source_id")
 
     # Compute required Source fields from filesystem.
     if not os.path.isfile(file_path):
         raise IngestError(f"File not found: {file_path!r}")
-    file_name = os.path.basename(file_path)
     file_type, _ = mimetypes.guess_type(file_path)
     file_type = file_type or "application/octet-stream"
     file_size = os.path.getsize(file_path)
 
-    # 1. Create Source.
-    source = Source(
-        file_path=file_path,
-        file_name=file_name,
-        file_type=file_type,
-        file_size=file_size,
-        status=ProcessingStatus.PROCESSING,
-        metadata_=source_meta,
-    )
-    db.add(source)
+    source: Source | None = None
+    if source_id is not None:
+        try:
+            source_uuid = uuid.UUID(str(source_id))
+        except ValueError as exc:
+            raise IngestError(f"Invalid source_id in payload: {source_id!r}") from exc
+        source_result = await db.execute(select(Source).where(Source.id == source_uuid))
+        source = source_result.scalar_one_or_none()
+        if source is None:
+            raise IngestError(f"Source not found for source_id={source_uuid!r}")
+
+    # 1. Create or reuse Source.
+    if source is not None:
+        source.status = ProcessingStatus.PROCESSING
+        source.file_path = file_path
+        source.file_type = file_type
+        source.file_size = file_size
+        if source_meta is not None:
+            source.metadata_ = source_meta
+    else:
+        source = Source(
+            file_path=file_path,
+            file_name=os.path.basename(file_path),
+            file_type=file_type,
+            file_size=file_size,
+            status=ProcessingStatus.PROCESSING,
+            metadata_=source_meta,
+        )
+        db.add(source)
     await db.flush()
 
     logger.info(
