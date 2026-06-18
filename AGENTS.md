@@ -124,6 +124,7 @@ only, not defer-all-to-batch. (ADR-0008)
 | 0010 | Ingestion workflow | Fully automated; `status` column for future review queue |
 | 0011 | Parsing | MinerU primary parser (deferred); lightweight is default |
 | 0012 | Retrieval | Hybrid retrieval implementation — vector seed + CTE traversal + context assembly |
+| 0013 | API | FastAPI API surface for automation and integration |
 
 ---
 
