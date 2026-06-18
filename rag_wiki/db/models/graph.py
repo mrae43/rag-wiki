@@ -134,6 +134,18 @@ class Relation(Base, UUIDMixin, TimestampMixin):
         default=PublishedStatus.PUBLISHED,
         server_default=PublishedStatus.PUBLISHED,
     )
+    confidence_tag: Mapped[str] = mapped_column(
+        sa.Text,
+        nullable=False,
+        default="INFERRED",
+        server_default="INFERRED",
+    )
+    confidence_score: Mapped[float | None] = mapped_column(
+        sa.Float,
+        nullable=True,
+        default=None,
+        server_default=None,
+    )
 
     chunk: Mapped[Chunk] = relationship("Chunk")
     source_entity: Mapped[Entity] = relationship(
