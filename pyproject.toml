@@ -55,6 +55,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "ANN"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
+plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 exclude = ["alembic/"]
 
