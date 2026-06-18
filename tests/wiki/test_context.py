@@ -15,15 +15,17 @@ from rag_wiki.providers.base import (
     CompletionResponse,
     EmbeddingProvider,
 )
+from rag_wiki.retrieval.scoring import (
+    cosine_similarity,
+    deduplicate_chunks,
+    score_chunks,
+    truncate_to_budget,
+)
 from rag_wiki.wiki.context import (
     _CHARS_PER_TOKEN,
     _TIER_2_BUDGET,
     build_entity_context,
     build_source_summary_context,
-    cosine_similarity,
-    deduplicate_chunks,
-    score_chunks,
-    truncate_to_budget,
 )
 
 
