@@ -29,14 +29,28 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        """Process the request with a bound request ID."""
+        """Process the request with a bound request ID.
+
+        The downstream handler is wrapped in try/except so that request
+        context is still logged — and attached to the response — when
+        the handler raises.
+        """
         request_id = request.headers.get(_REQUEST_ID_HEADER) or str(uuid.uuid4())
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=request_id)
 
-        response = await call_next(request)
-        response.headers[_REQUEST_ID_HEADER] = request_id
-        return response
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception(
+                "request_failed",
+                request_path=request.url.path,
+                request_id=request_id,
+            )
+            raise
+        else:
+            response.headers[_REQUEST_ID_HEADER] = request_id
+            return response
 
 
 def add_request_id_middleware(app: FastAPI) -> None:

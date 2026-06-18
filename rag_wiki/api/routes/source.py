@@ -123,13 +123,18 @@ async def create_source(
     content_length = request.headers.get("content-length")
     if content_length is not None:
         try:
-            if int(content_length) > settings.upload_max_file_size_bytes:
+            content_length_int = int(content_length)
+        except ValueError:
+            logger.warning(
+                "invalid_content_length_header",
+                content_length=content_length,
+            )
+        else:
+            if content_length_int > settings.upload_max_file_size_bytes:
                 raise PayloadTooLargeError(
                     f"File exceeds maximum size of "
                     f"{settings.upload_max_file_size_bytes} bytes"
                 )
-        except ValueError:
-            pass
 
     source_id = uuid.uuid4()
     file_path = settings.upload_dir / str(source_id)
