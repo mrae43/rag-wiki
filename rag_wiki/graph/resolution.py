@@ -354,6 +354,7 @@ async def resolve_entities(
                 relation_type=rel.relation_type,
                 chunk_id=chunk.id,
                 status=PublishedStatus.PUBLISHED,
+                confidence_tag="INFERRED",
             )
             db.add(relation)
         logger.info(
