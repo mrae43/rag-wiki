@@ -18,6 +18,7 @@ import structlog
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DBAPIError, IntegrityError, OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from rag_wiki.api.schemas import ProblemDetail
@@ -144,21 +145,47 @@ async def http_exception_handler(
     )
 
 
+def _status_for_unhandled(exc: Exception) -> int:
+    """Map an unhandled exception to an HTTP status code."""
+    if isinstance(exc, IntegrityError):
+        return 409
+    if isinstance(exc, OperationalError):
+        return 503
+    if isinstance(exc, DBAPIError):
+        return 503
+    return 500
+
+
+def _title_for_status(status: int) -> str:
+    """Return a human-readable title for a status code."""
+    try:
+        return HTTPStatus(status).phrase
+    except ValueError:
+        return "Unknown Error"
+
+
 async def catch_all_exception_handler(
     request: Request, exc: Exception
 ) -> ProblemDetailResponse:
-    """Return a generic 500 Problem Detail and log the traceback."""
+    """Return a Problem Detail for any unhandled exception.
+
+    Maps known SQLAlchemy errors (IntegrityError, OperationalError, DBAPIError)
+    to meaningful status codes; everything else becomes a generic 500.
+    """
     request_id = structlog.contextvars.get_contextvars().get("request_id")
+    status = _status_for_unhandled(exc)
+    title = _title_for_status(status)
     logger.exception(
         "api_unhandled_exception",
         request_path=request.url.path,
         request_id=request_id,
+        status=status,
         exc_info=exc,
     )
     problem = _build_problem_detail(
         request,
-        500,
-        "Internal Server Error",
+        status,
+        title,
         "An unexpected error occurred.",
     )
-    return ProblemDetailResponse(status_code=500, content=problem.model_dump())
+    return ProblemDetailResponse(status_code=status, content=problem.model_dump())
