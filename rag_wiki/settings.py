@@ -38,6 +38,18 @@ class Settings(BaseSettings):
     # Parser
     parser: Literal["lightweight", "mineru"] = "lightweight"
 
+    # Retrieval
+    retrieval_seed_count: int = 3
+    retrieval_max_hops: int = 2
+    retrieval_max_neighbors_per_hop: int = 10
+    retrieval_max_total_nodes: int = 50
+    retrieval_dedup_threshold: float = 0.92
+    retrieval_total_budget_tokens: int = 3600
+    retrieval_anchor_budget_tokens: int = 200
+    retrieval_subgraph_budget_tokens: int = 400
+    retrieval_wiki_page_budget_tokens: int = 1000
+    retrieval_instruction_budget_tokens: int = 200
+
     # Worker
     worker_poll_interval_seconds: int = 2
     worker_max_retries: int = 3

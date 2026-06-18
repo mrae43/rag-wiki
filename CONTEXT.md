@@ -26,3 +26,8 @@ the atomic unit that gets embedded and linked into the knowledge graph.
 ### Entity / Relation
 Nodes and edges of the knowledge graph, extracted from Chunks. Entities represent
 real-world concepts (people, places, ideas); Relations represent how they connect.
+
+### Seed
+An **entity** used as the starting point for a graph traversal during retrieval.
+Seeds are found by vector-similarity search of the user query against entity
+embeddings, or provided directly for entity navigation.

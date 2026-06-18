@@ -36,3 +36,11 @@ class IngestError(RagWikiError):
 
 class ParseError(IngestError):
     """Raised when a document cannot be parsed by any available parser."""
+
+
+class RetrievalError(RagWikiError):
+    """Raised when the retrieval pipeline cannot assemble context.
+
+    Base class for hierarchy completeness; the pipeline returns a valid
+    RetrievalResult even when no seeds are found rather than raising.
+    """
