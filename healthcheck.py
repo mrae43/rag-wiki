@@ -169,7 +169,7 @@ def check_structure(root: Path) -> CheckResult:
         )
 
     # Check depth
-    for p in root.rglob("*.py"):
+    for p in py_files(root):
         depth = len(p.relative_to(root).parts)
         if depth > MAX_DEPTH:
             findings.append(
