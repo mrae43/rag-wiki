@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from rag_wiki.db.models.graph import Entity, PublishedStatus, Relation
 from rag_wiki.db.models.source import Chunk, ProcessingStatus, Source
 from rag_wiki.retrieval.traversal import traverse
+from rag_wiki.settings import Settings
 
 
 async def _make_entity(db: AsyncSession, name: str) -> Entity:
@@ -109,6 +110,47 @@ async def test_traversal_total_node_ceiling(db: AsyncSession) -> None:
     result = await traverse([seed.id], db)
     assert len(result.entities) == 5
     assert len(result.relations) == 5
+
+
+@pytest.mark.asyncio
+async def test_traversal_per_hop_limit(
+    db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Default retrieval_max_neighbors_per_hop is 10; create 15 to exercise it.
+    seed = await _make_entity(db, "StarSeed")
+    neighbors = [await _make_entity(db, f"N{i}") for i in range(15)]
+    for n in neighbors:
+        await _make_relation(db, seed, n)
+
+    result = await traverse([seed.id], db)
+    assert len(result.entities) == 10
+    assert len(result.relations) == 10
+
+
+@pytest.mark.asyncio
+async def test_traversal_total_node_ceiling_boundary(
+    db: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Raise per-hop limit so the total-node ceiling (50) is the binding constraint.
+    settings = Settings(
+        database_url="postgresql+asyncpg://test:test@localhost:5432/test",
+        retrieval_max_neighbors_per_hop=100,
+    )
+    monkeypatch.setattr(
+        "rag_wiki.retrieval.traversal.get_settings",
+        lambda: settings,
+    )
+
+    seed = await _make_entity(db, "DenseSeed")
+    neighbors = [await _make_entity(db, f"N{i}") for i in range(60)]
+    for n in neighbors:
+        await _make_relation(db, seed, n)
+
+    result = await traverse([seed.id], db)
+    assert len(result.entities) == 50
+    assert len(result.relations) == 50
 
 
 @pytest.mark.asyncio

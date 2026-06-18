@@ -28,7 +28,7 @@ async def retrieve(
     query: str,
     db: AsyncSession,
     embed_provider: EmbeddingProvider,
-    max_context_tokens: int,
+    max_context_tokens: int | None = None,
     seed_entity_ids: list[uuid.UUID] | None = None,
 ) -> RetrievalResult:
     """Retrieve structured context for a user query.
@@ -47,7 +47,8 @@ async def retrieve(
                         both vector search and chunk scoring.
         max_context_tokens: Remaining token budget after the caller has
                             subtracted conversation history, system prompt,
-                            and expected response overhead.
+                            and expected response overhead. Defaults to
+                            ``settings.retrieval_total_budget_tokens``.
         seed_entity_ids: If provided, skips vector search and uses these
                          entities as seeds directly. Useful for direct
                          entity navigation and wiki-link traversal.
@@ -56,6 +57,8 @@ async def retrieve(
         RetrievalResult with all context slots populated and token accounting.
     """
     settings = get_settings()
+    if max_context_tokens is None:
+        max_context_tokens = settings.retrieval_total_budget_tokens
 
     # 1. Embed query once.
     query_embeddings = await embed_provider.embed(

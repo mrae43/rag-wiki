@@ -49,6 +49,7 @@ ENTITY_PAGE_SECTION_PRIORITY = [
     "relationships",
     "contradictions",
     "sources",
+    "other",
 ]
 
 SOURCE_PAGE_SECTION_PRIORITY = [
@@ -58,6 +59,7 @@ SOURCE_PAGE_SECTION_PRIORITY = [
     "contradictions",
     "ingest_history",
     "sources",
+    "other",
 ]
 
 
@@ -72,7 +74,7 @@ def _heading_to_tag(heading: str) -> str:
         "key relations introduced": "key_relations",
         "ingest history": "ingest_history",
     }
-    return mapping.get(heading, "entity_prose")
+    return mapping.get(heading, "other")
 
 
 def _parse_sections(content: str) -> list[tuple[str, str]]:
@@ -159,16 +161,45 @@ async def _fetch_wiki_page(
     )
 
 
-def _score_chunk_pairs(
+async def _score_chunk_pairs(
     pairs: list[tuple[Chunk, uuid.UUID]],
     query_embedding: list[float],
+    embed_provider: EmbeddingProvider,
+    model: str,
 ) -> list[tuple[float, Chunk, uuid.UUID]]:
-    """Score (chunk, entity_id) pairs against a pre-computed query embedding."""
+    """Score (chunk, entity_id) pairs against a pre-computed query embedding.
+
+    Chunks that lack an embedding are embedded on-the-fly using
+    *embed_provider*, matching the behavior documented in ADR-0012.
+    """
+    if not pairs:
+        return []
+
+    chunks_missing = [
+        chunk for chunk, _ in pairs if chunk.embedding is None and chunk.text_content
+    ]
+    if chunks_missing:
+        texts = [c.text_content or "" for c in chunks_missing]
+        logger.debug(
+            "embedding_chunks_for_scoring",
+            count=len(chunks_missing),
+            model=model,
+        )
+        new_embeddings = await embed_provider.embed(texts, model=model)
+        for chunk, emb in zip(chunks_missing, new_embeddings, strict=True):
+            chunk.embedding = emb
+
     scored: list[tuple[float, Chunk, uuid.UUID]] = []
     for chunk, entity_id in pairs:
         if chunk.embedding is None:
             continue
         if len(chunk.embedding) != len(query_embedding):
+            logger.warning(
+                "embedding_dimension_mismatch",
+                chunk_id=str(chunk.id),
+                chunk_dim=len(chunk.embedding),
+                desc_dim=len(query_embedding),
+            )
             continue
         sim = cosine_similarity(query_embedding, chunk.embedding)
         scored.append((sim, chunk, entity_id))
@@ -212,8 +243,8 @@ async def assemble_context(
         seeds: Seed entities from the seed-finding step.
         traversal: Traversed subgraph.
         db: Async SQLAlchemy session.
-        embed_provider: Provider for on-the-fly chunk embedding (unused when
-            all chunks already have embeddings).
+        embed_provider: Provider for on-the-fly chunk embedding; used when
+            retrieved chunks lack pre-computed embeddings.
         max_context_tokens: Total token budget provided by the caller.
 
     Returns:
@@ -319,8 +350,12 @@ async def assemble_context(
             chunks_fetched = len(seed_pairs) + len(hop_pairs)
 
             # Score with the pre-computed query embedding.
-            seed_scored = _score_chunk_pairs(seed_pairs, query_embedding)
-            hop_scored = _score_chunk_pairs(hop_pairs, query_embedding)
+            seed_scored = await _score_chunk_pairs(
+                seed_pairs, query_embedding, embed_provider, settings.embedding_model
+            )
+            hop_scored = await _score_chunk_pairs(
+                hop_pairs, query_embedding, embed_provider, settings.embedding_model
+            )
 
             # Deduplicate globally across seed + hop.
             all_for_dedup = [(sim, chunk) for sim, chunk, _ in seed_scored + hop_scored]
