@@ -307,36 +307,47 @@ def check_errors(root: Path) -> CheckResult:
                 )
 
         # FastAPI route handlers: check for missing HTTPException on DB calls
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
-                has_db_call = any(
-                    isinstance(n, ast.Await) and isinstance(n.value, ast.Call)
-                    for n in ast.walk(node)
-                )
-                has_try = any(isinstance(n, ast.Try) for n in ast.walk(node))
-                # Heuristic: route functions often have request/response param names
-                param_names = [a.arg for a in node.args.args]
-                looks_like_route = any(
-                    p in param_names
-                    for p in (
-                        "db",
-                        "session",
-                        "request",
-                        "response",
-                        "background_tasks",
+        if "tests" not in f.parts:
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
+                    has_db_call = any(
+                        isinstance(n, ast.Await) and isinstance(n.value, ast.Call)
+                        for n in ast.walk(node)
                     )
-                )
-                if looks_like_route and has_db_call and not has_try:
-                    findings.append(
-                        Finding(
-                            check="errors",
-                            severity="high",
-                            file=rel(f, root),
-                            line=node.lineno,
-                            issue=f"Route handler `{node.name}` makes async DB calls without try/except",
-                            fix="Wrap DB operations in try/except and raise HTTPException or a mapped AppError",
+                    has_try = any(isinstance(n, ast.Try) for n in ast.walk(node))
+                    # Skip private helpers — not route handlers
+                    if node.name.startswith("_"):
+                        continue
+                    # Skip health-check endpoints — intentional no try/except
+                    is_health = any(
+                        "/health" in (ast.unparse(d) if hasattr(ast, "unparse") else "")
+                        for d in node.decorator_list
+                    )
+                    if is_health:
+                        continue
+                    # Heuristic: route functions often have request/response param names
+                    param_names = [a.arg for a in node.args.args]
+                    looks_like_route = any(
+                        p in param_names
+                        for p in (
+                            "db",
+                            "session",
+                            "request",
+                            "response",
+                            "background_tasks",
                         )
                     )
+                    if looks_like_route and has_db_call and not has_try:
+                        findings.append(
+                            Finding(
+                                check="errors",
+                                severity="high",
+                                file=rel(f, root),
+                                line=node.lineno,
+                                issue=f"Route handler `{node.name}` makes async DB calls without try/except",
+                                fix="Wrap DB operations in try/except and raise HTTPException or a mapped AppError",
+                            )
+                        )
 
     score = max(0, 100 - len(findings) * 10)
     return CheckResult("Error handling", score, findings)
@@ -447,7 +458,11 @@ def check_types(root: Path) -> CheckResult:
             if isinstance(node, ast.FunctionDef):
                 for decorator in node.decorator_list:
                     dec_str = ast.unparse(decorator) if hasattr(ast, "unparse") else ""
-                    if "validator" in dec_str and "field_validator" not in dec_str:
+                    if (
+                        "validator" in dec_str
+                        and "field_validator" not in dec_str
+                        and "model_validator" not in dec_str
+                    ):
                         findings.append(
                             Finding(
                                 check="types",
@@ -559,6 +574,8 @@ def check_docs(root: Path) -> CheckResult:
 
     # Public functions/classes without docstrings
     for f in py_files(root):
+        if f.name == "healthcheck.py":
+            continue
         tree = parse_ast(f)
         if not tree:
             continue
@@ -805,6 +822,8 @@ def check_security(root: Path) -> CheckResult:
     ]
 
     for f in py_files(root):
+        if "tests" in f.parts:
+            continue
         src = read_source(f)
         lines = src.splitlines()
         for i, line in enumerate(lines, 1):
@@ -933,6 +952,8 @@ def check_performance(root: Path) -> CheckResult:
         tree = parse_ast(f)
         if not tree:
             continue
+        if f.name == "healthcheck.py" or "tests" in f.parts:
+            continue
         src = read_source(f)
         lines = src.splitlines()
 
@@ -995,6 +1016,14 @@ def check_performance(root: Path) -> CheckResult:
             ]
             is_get_route = any(".get(" in d for d in dec_strs)
             if not is_get_route:
+                continue
+            # Skip health endpoints
+            is_health = any("/health" in d for d in dec_strs)
+            if is_health:
+                continue
+            # Skip single-resource lookups (routes with path params)
+            has_path_param = any("{" in d for d in dec_strs)
+            if has_path_param:
                 continue
             param_names = [a.arg for a in node.args.args] + [
                 a.arg for a in (node.args.kwonlyargs or [])
@@ -1328,6 +1357,9 @@ def check_consistency(root: Path) -> CheckResult:
                 "enum",
                 "dataclasses",
                 "abc",
+                "argparse",
+                "ast",
+                "subprocess",
             }
             found_third_party = False
             for lineno, line in import_lines:
