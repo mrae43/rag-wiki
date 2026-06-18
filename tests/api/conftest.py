@@ -25,6 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 
 from rag_wiki.api.dependencies import get_chat_provider, get_db, get_embedding_provider
 from rag_wiki.db.base import Base
+from rag_wiki.db.models import (
+    Chunk,
+    Entity,
+    ProcessingStatus,
+    Relation,
+    Source,
+    WikiPage,
+)
 from rag_wiki.main import create_app
 from rag_wiki.settings import Settings, get_settings
 
@@ -88,3 +96,76 @@ async def api_client(
         client.app = app  # type: ignore[attr-defined]
         yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def seeded_source(db: AsyncSession) -> Source:
+    """A source with two processed text chunks."""
+    source = Source(
+        file_path="/tmp/seeded.txt",
+        file_name="seeded.txt",
+        file_type="text/plain",
+        file_size=12,
+        status=ProcessingStatus.PROCESSED,
+    )
+    db.add(source)
+    await db.flush()
+
+    for i in range(2):
+        db.add(
+            Chunk(
+                source_id=source.id,
+                chunk_index=i,
+                chunk_type="text",
+                text_content=f"seeded chunk {i}",
+                status=ProcessingStatus.PROCESSED,
+            )
+        )
+    await db.flush()
+    return source
+
+
+@pytest.fixture
+async def seeded_entities(db: AsyncSession) -> tuple[Entity, Entity]:
+    """Two connected entities for graph browsing tests."""
+    source_entity = Entity(name="Seed Source", entity_type="concept")
+    target_entity = Entity(name="Seed Target", entity_type="concept")
+    db.add(source_entity)
+    db.add(target_entity)
+    await db.flush()
+    return source_entity, target_entity
+
+
+@pytest.fixture
+async def seeded_relation(
+    db: AsyncSession, seeded_entities: tuple[Entity, Entity], seeded_source: Source
+) -> Relation:
+    """A relation between the two seeded entities, provenanced by a chunk."""
+    source_entity, target_entity = seeded_entities
+    chunk = seeded_source.chunks[0]
+    relation = Relation(
+        source_entity_id=source_entity.id,
+        target_entity_id=target_entity.id,
+        relation_type="relates_to",
+        chunk_id=chunk.id,
+    )
+    db.add(relation)
+    await db.flush()
+    return relation
+
+
+@pytest.fixture
+async def seeded_wiki_page(
+    db: AsyncSession, seeded_entities: tuple[Entity, Entity]
+) -> WikiPage:
+    """A wiki page associated with the first seeded entity."""
+    source_entity, _ = seeded_entities
+    page = WikiPage(
+        entity_id=source_entity.id,
+        slug="seed-source",
+        title="Seed Source",
+        content="# Seed Source\n\nSeeded wiki content.",
+    )
+    db.add(page)
+    await db.flush()
+    return page
