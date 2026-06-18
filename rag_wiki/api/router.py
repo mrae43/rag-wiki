@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from rag_wiki.api.routes import health, job, source
+from rag_wiki.api.routes import entity, health, job, relation, source, wiki_page
 
 api_router = APIRouter()
 api_router.include_router(health.router)
@@ -19,4 +19,7 @@ api_router.include_router(health.router)
 v1_router = APIRouter(prefix="/api/v1")
 v1_router.include_router(source.router)
 v1_router.include_router(job.router)
+v1_router.include_router(entity.router)
+v1_router.include_router(relation.router)
+v1_router.include_router(wiki_page.router)
 api_router.include_router(v1_router)
