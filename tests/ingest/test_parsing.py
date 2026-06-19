@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 import os
 import tempfile
-from collections.abc import Generator
 
 import fitz
 import pytest

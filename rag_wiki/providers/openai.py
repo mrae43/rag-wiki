@@ -10,8 +10,8 @@ OpenAI-compatible endpoint configured via LLM_BASE_URL.
 
 from __future__ import annotations
 
-import base64
 from typing import Any
+import base64
 
 import openai
 import structlog

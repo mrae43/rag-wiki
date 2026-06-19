@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import os
 import logging
 import mimetypes
-import os
 
 from rag_wiki.exceptions import ParseError
 from rag_wiki.ingest.schemas import ParsedChunk

@@ -9,11 +9,11 @@ Implements the PRD section-11 worker flow for entity wiki page synthesis.
 
 from __future__ import annotations
 
+import uuid
 import asyncio
 import datetime
-import hashlib
-import uuid
 from pathlib import Path
+import hashlib
 
 import structlog
 from jinja2 import Environment, FileSystemLoader

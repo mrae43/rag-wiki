@@ -16,10 +16,10 @@ relation indices. Returns a mapping of original index → resolved Entity.
 
 from __future__ import annotations
 
-import hashlib
-import json
-import uuid
 from typing import Any
+import uuid
+import json
+import hashlib
 
 import structlog
 from sqlalchemy import text

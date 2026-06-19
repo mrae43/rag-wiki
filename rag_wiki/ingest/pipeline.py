@@ -9,10 +9,10 @@ or worker lifecycle — that lives in rag_wiki.worker.
 
 from __future__ import annotations
 
-import asyncio
-import mimetypes
 import os
 import uuid
+import asyncio
+import mimetypes
 
 import structlog
 from sqlalchemy import select
