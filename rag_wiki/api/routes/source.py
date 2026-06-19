@@ -26,6 +26,7 @@ from rag_wiki.api.dependencies import get_db
 from rag_wiki.api.exceptions import BadRequestError, NotFoundError, PayloadTooLargeError
 from rag_wiki.api.schemas import PaginatedListEnvelope
 from rag_wiki.db.models import Chunk, ProcessingStatus, Source
+from rag_wiki.exceptions import DatabaseError
 from rag_wiki.jobs import enqueue
 from rag_wiki.settings import Settings, get_settings
 
@@ -81,8 +82,16 @@ def _parse_metadata(metadata: str | None) -> dict[str, Any] | None:
 
 async def _get_source_or_404(db: AsyncSession, source_id: uuid.UUID) -> Source:
     """Fetch a source by id, raising a 404 Problem Detail if missing."""
-    result = await db.execute(select(Source).where(Source.id == source_id))
-    source = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(Source).where(Source.id == source_id))
+        source = result.scalar_one_or_none()
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch source",
+            source_id=str(source_id),
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to fetch source {source_id}") from exc
     if source is None:
         raise NotFoundError(f"Source not found: {source_id}")
     return source
@@ -129,6 +138,9 @@ async def create_source(
                 "invalid_content_length_header",
                 content_length=content_length,
             )
+            raise BadRequestError(
+                f"Invalid Content-Length header: {content_length}"
+            ) from None
         else:
             if content_length_int > settings.upload_max_file_size_bytes:
                 raise PayloadTooLargeError(
@@ -251,11 +263,21 @@ async def list_sources(
 
     stmt = stmt.order_by(Source.created_at.desc()).offset(offset).limit(limit)
 
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar_one()
+    try:
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar_one()
 
-    result = await db.execute(stmt)
-    sources = result.scalars().all()
+        result = await db.execute(stmt)
+        sources = result.scalars().all()
+    except Exception as exc:
+        logger.error(
+            "Failed to list sources",
+            offset=offset,
+            limit=limit,
+            status=status,
+            error=str(exc),
+        )
+        raise DatabaseError("Failed to list sources") from exc
     items = [
         SourceResponse(
             id=s.id,
@@ -306,7 +328,15 @@ async def delete_source(
     """Delete a source, its chunks (cascade), and the uploaded file."""
     source = await _get_source_or_404(db, source_id)
     await _delete_upload(Path(source.file_path))
-    await db.delete(source)
+    try:
+        await db.delete(source)
+    except Exception as exc:
+        logger.error(
+            "Failed to delete source",
+            source_id=str(source_id),
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to delete source {source_id}") from exc
 
 
 @router.get(
@@ -333,11 +363,21 @@ async def list_source_chunks(
     )
     count_stmt = select(func.count(Chunk.id)).where(Chunk.source_id == source_id)
 
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar_one()
+    try:
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar_one()
 
-    result = await db.execute(stmt)
-    chunks = result.scalars().all()
+        result = await db.execute(stmt)
+        chunks = result.scalars().all()
+    except Exception as exc:
+        logger.error(
+            "Failed to list source chunks",
+            source_id=str(source_id),
+            offset=offset,
+            limit=limit,
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to list chunks for source {source_id}") from exc
     items = [
         ChunkResponse(
             id=c.id,
