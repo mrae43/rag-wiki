@@ -41,6 +41,7 @@ _EXPECTED_HNSW_INDEXES: list[str] = []
 
 
 async def _table_exists(conn: AsyncConnection, table_name: str) -> bool:
+    """Check whether a table exists in the public schema."""
     result = await conn.execute(
         text(
             "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
@@ -53,6 +54,7 @@ async def _table_exists(conn: AsyncConnection, table_name: str) -> bool:
 
 
 async def _index_exists(conn: AsyncConnection, index_name: str) -> bool:
+    """Check whether a Postgres index exists in the public schema."""
     result = await conn.execute(
         text(
             "SELECT EXISTS (SELECT 1 FROM pg_indexes "
@@ -65,6 +67,7 @@ async def _index_exists(conn: AsyncConnection, index_name: str) -> bool:
 
 
 def _alembic_cfg() -> Config:
+    """Build an Alembic Config pointing at the project's migrations directory."""
     root = Path(__file__).resolve().parent.parent.parent
     cfg = Config()
     cfg.set_main_option("script_location", str(root / "alembic"))
@@ -120,6 +123,7 @@ async def migration_engine() -> AsyncGenerator[AsyncEngine, None]:
 
 
 async def test_upgrade_creates_all_tables(migration_engine: AsyncEngine) -> None:
+    """Verify that every expected table exists after running upgrade."""
     await _run_upgrade(migration_engine)
     async with migration_engine.connect() as conn:
         for table in _EXPECTED_TABLES:
@@ -130,6 +134,7 @@ async def test_upgrade_creates_all_tables(migration_engine: AsyncEngine) -> None
 async def test_upgrade_creates_hnsw_indexes(
     migration_engine: AsyncEngine,
 ) -> None:
+    """Verify that every expected HNSW index exists after running upgrade."""
     await _run_upgrade(migration_engine)
     async with migration_engine.connect() as conn:
         for idx in _EXPECTED_HNSW_INDEXES:
@@ -140,6 +145,7 @@ async def test_upgrade_creates_hnsw_indexes(
 async def test_downgrade_removes_all_tables(
     migration_engine: AsyncEngine,
 ) -> None:
+    """Verify that every table created by the migration is removed on downgrade."""
     await _run_upgrade(migration_engine)
     await _run_downgrade(migration_engine)
     async with migration_engine.connect() as conn:
@@ -149,6 +155,7 @@ async def test_downgrade_removes_all_tables(
 
 
 async def _column_default(conn: AsyncConnection, table: str, column: str) -> str | None:
+    """Return the server-side default expression for a column, or None."""
     result = await conn.execute(
         text(
             "SELECT column_default FROM information_schema.columns "
@@ -164,6 +171,7 @@ async def _column_default(conn: AsyncConnection, table: str, column: str) -> str
 async def test_downgrade_removes_hnsw_indexes(
     migration_engine: AsyncEngine,
 ) -> None:
+    """Verify that every HNSW index created by the migration is removed on downgrade."""
     await _run_upgrade(migration_engine)
     await _run_downgrade(migration_engine)
     async with migration_engine.connect() as conn:

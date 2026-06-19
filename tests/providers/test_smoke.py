@@ -12,6 +12,7 @@ from rag_wiki.settings import get_settings
 
 
 async def test_fake_chat_provider_complete(mock_chat_provider: ChatProvider) -> None:
+    """Verify the fake chat provider returns a completion containing 'fake-completion'."""
     result = await mock_chat_provider.complete(
         CompletionRequest(
             model="gpt-4o-mini",
@@ -23,6 +24,7 @@ async def test_fake_chat_provider_complete(mock_chat_provider: ChatProvider) -> 
 
 
 async def test_fake_chat_provider_caption(mock_chat_provider: ChatProvider) -> None:
+    """Verify the fake chat provider returns a caption containing 'fake-caption'."""
     result = await mock_chat_provider.caption_image(
         b"fake_image",
         "image/png",
@@ -35,6 +37,7 @@ async def test_fake_chat_provider_caption(mock_chat_provider: ChatProvider) -> N
 async def test_fake_embedding_provider_embed(
     mock_embedding_provider: EmbeddingProvider,
 ) -> None:
+    """Verify the fake embedding provider returns zero-filled vectors of the configured dimension."""
     result = await mock_embedding_provider.embed(
         ["hello", "world"],
         "text-embedding-3-small",
@@ -48,6 +51,7 @@ async def test_fake_embedding_provider_embed(
 
 
 async def test_fake_chat_provider_with_tools(mock_chat_provider: ChatProvider) -> None:
+    """Verify the fake chat provider handles tool definitions and returns a tool call."""
     from rag_wiki.providers.base import ToolDefinition
 
     result = await mock_chat_provider.complete(
@@ -71,6 +75,7 @@ async def test_fake_chat_provider_with_tools(mock_chat_provider: ChatProvider) -
 async def test_fake_chat_provider_without_tools(
     mock_chat_provider: ChatProvider,
 ) -> None:
+    """Verify the fake chat provider returns no tool calls when no tools are provided."""
     result = await mock_chat_provider.complete(
         CompletionRequest(
             model="gpt-4o-mini",

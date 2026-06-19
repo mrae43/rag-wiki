@@ -18,6 +18,7 @@ from rag_wiki.jobs import claim_next, complete_job, enqueue, fail_job
 async def test_enqueue_creates_pending_job_with_correct_defaults(
     db: AsyncSession,
 ) -> None:
+    """Verify enqueue creates a pending job with correct defaults."""
     job = await enqueue(
         db,
         "ingest_document",
@@ -33,11 +34,13 @@ async def test_enqueue_creates_pending_job_with_correct_defaults(
 
 
 async def test_claim_next_returns_none_when_queue_empty(db: AsyncSession) -> None:
+    """Verify claim_next returns None when no pending jobs exist."""
     result = await claim_next(db, worker_id="worker-1")
     assert result is None
 
 
 async def test_claim_next_claims_oldest_pending_job(db: AsyncSession) -> None:
+    """Verify claim_next claims the oldest pending job and sets claim metadata."""
     job1 = await enqueue(db, "ingest_document", payload={"file_path": "/tmp/1.md"})
     await enqueue(db, "ingest_document", payload={"file_path": "/tmp/2.md"})
     await db.commit()
@@ -51,6 +54,7 @@ async def test_claim_next_claims_oldest_pending_job(db: AsyncSession) -> None:
 
 
 async def test_claim_next_respects_scheduled_at_ordering(db: AsyncSession) -> None:
+    """Verify claim_next skips future-scheduled jobs and returns unscheduled ones."""
     future = datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1)
     await enqueue(
         db,
@@ -71,6 +75,7 @@ async def test_claim_next_respects_scheduled_at_ordering(db: AsyncSession) -> No
 
 
 async def test_complete_job_sets_status_and_completed_at(db: AsyncSession) -> None:
+    """Verify complete_job sets status to completed and records completed_at."""
     job = await enqueue(db, "ingest_document")
     await db.commit()
 
@@ -84,6 +89,7 @@ async def test_complete_job_sets_status_and_completed_at(db: AsyncSession) -> No
 async def test_fail_job_increments_attempts_and_schedules_retry(
     db: AsyncSession,
 ) -> None:
+    """Verify fail_job increments attempts, records error, and resets job to pending."""
     job = await enqueue(db, "ingest_document")
     job.max_retries = 3
     await db.commit()
@@ -98,6 +104,7 @@ async def test_fail_job_increments_attempts_and_schedules_retry(
 
 
 async def test_fail_job_marks_failed_after_max_retries(db: AsyncSession) -> None:
+    """Verify fail_job sets status to failed when attempts reach max_retries."""
     job = await enqueue(db, "ingest_document")
     job.max_retries = 2
     job.attempts = 2
@@ -111,6 +118,7 @@ async def test_fail_job_marks_failed_after_max_retries(db: AsyncSession) -> None
 
 
 async def test_claim_next_skips_failed_and_completed_jobs(db: AsyncSession) -> None:
+    """Verify claim_next skips failed and completed jobs, returning only pending."""
     failed_job = await enqueue(
         db, "ingest_document", payload={"file_path": "/tmp/failed.md"}
     )

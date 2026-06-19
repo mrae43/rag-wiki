@@ -21,6 +21,7 @@ from rag_wiki.settings import Settings
 
 
 def _make_settings() -> Settings:
+    """Return a minimal Settings instance with a test API key and database URL."""
     return Settings(
         database_url="postgresql+asyncpg://test:test@localhost:5432/test",
         llm_api_key="test-key",
@@ -30,6 +31,7 @@ def _make_settings() -> Settings:
 
 
 async def test_openai_provider_complete_basic() -> None:
+    """Test complete() returns the expected content string with no tool calls."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_response = MagicMock()
@@ -60,6 +62,7 @@ async def test_openai_provider_complete_basic() -> None:
 
 
 async def test_openai_provider_complete_with_system() -> None:
+    """Test complete() prepends a system message when system prompt is provided."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_response = MagicMock()
@@ -90,6 +93,7 @@ async def test_openai_provider_complete_with_system() -> None:
 
 
 async def test_openai_provider_complete_with_tools() -> None:
+    """Test complete() returns ToolCall results when tools are provided."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     function_mock = MagicMock()
@@ -146,6 +150,7 @@ async def test_openai_provider_complete_with_tools() -> None:
 
 
 async def test_openai_provider_complete_passes_temperature_and_max_tokens() -> None:
+    """Test complete() forwards temperature and max_tokens to the API call."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_response = MagicMock()
@@ -175,6 +180,7 @@ async def test_openai_provider_complete_passes_temperature_and_max_tokens() -> N
 
 
 async def test_openai_provider_complete_api_error_raises_llm_provider_error() -> None:
+    """Test complete() raises LLMProviderError when the OpenAI SDK returns an APIError."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_client.chat.completions.create = AsyncMock(
@@ -196,6 +202,7 @@ async def test_openai_provider_complete_api_error_raises_llm_provider_error() ->
 
 
 async def test_openai_provider_caption_image() -> None:
+    """Test caption_image() sends base64-encoded image bytes and returns the caption text."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_response = MagicMock()
@@ -228,6 +235,7 @@ async def test_openai_provider_caption_image() -> None:
 
 
 async def test_openai_provider_caption_image_api_error_raises() -> None:
+    """Test caption_image() raises LLMProviderError when the OpenAI SDK returns an APIError."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_client.chat.completions.create = AsyncMock(
@@ -248,6 +256,7 @@ async def test_openai_provider_caption_image_api_error_raises() -> None:
 
 
 async def test_openai_provider_embed() -> None:
+    """Test embed() returns a list of embedding vectors for each input string."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_response = MagicMock()
@@ -270,6 +279,7 @@ async def test_openai_provider_embed() -> None:
 
 
 async def test_openai_provider_embed_passes_dimensions() -> None:
+    """Test embed() sends the dimensions parameter when embedding_dimensions is set."""
     settings = _make_settings()
     settings.embedding_dimensions = 512
     mock_client = MagicMock(spec=openai.AsyncClient)
@@ -285,6 +295,7 @@ async def test_openai_provider_embed_passes_dimensions() -> None:
 
 
 async def test_openai_provider_embed_api_error_raises() -> None:
+    """Test embed() raises LLMProviderError when the OpenAI SDK returns an APIError."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_client.embeddings.create = AsyncMock(
@@ -304,6 +315,7 @@ async def test_openai_provider_embed_api_error_raises() -> None:
 
 
 async def test_openai_provider_complete_unexpected_error_raises() -> None:
+    """Test complete() raises LLMProviderError even for non-API (unexpected) exceptions."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("boom"))
@@ -319,6 +331,7 @@ async def test_openai_provider_complete_unexpected_error_raises() -> None:
 
 
 async def test_openai_provider_embed_no_dimensions_when_zero() -> None:
+    """Test embed() omits the dimensions parameter when embedding_dimensions is 0."""
     settings = _make_settings()
     settings.embedding_dimensions = 0
     mock_client = MagicMock(spec=openai.AsyncClient)

@@ -76,41 +76,49 @@ async def _column_default(conn: AsyncConnection, table: str, column: str) -> str
 
 
 async def test_sources_table_exists(engine: AsyncEngine) -> None:
+    """Verify the ``sources`` table exists in the public schema."""
     async with engine.connect() as conn:
         assert await _table_exists(conn, "sources")
 
 
 async def test_chunks_table_exists(engine: AsyncEngine) -> None:
+    """Verify the ``chunks`` table exists in the public schema."""
     async with engine.connect() as conn:
         assert await _table_exists(conn, "chunks")
 
 
 async def test_entities_table_exists(engine: AsyncEngine) -> None:
+    """Verify the ``entities`` table exists in the public schema."""
     async with engine.connect() as conn:
         assert await _table_exists(conn, "entities")
 
 
 async def test_relations_table_exists(engine: AsyncEngine) -> None:
+    """Verify the ``relations`` table exists in the public schema."""
     async with engine.connect() as conn:
         assert await _table_exists(conn, "relations")
 
 
 async def test_chunk_entities_table_exists(engine: AsyncEngine) -> None:
+    """Verify the ``chunk_entities`` join table exists in the public schema."""
     async with engine.connect() as conn:
         assert await _table_exists(conn, "chunk_entities")
 
 
 async def test_wiki_pages_table_exists(engine: AsyncEngine) -> None:
+    """Verify the ``wiki_pages`` table exists in the public schema."""
     async with engine.connect() as conn:
         assert await _table_exists(conn, "wiki_pages")
 
 
 async def test_wiki_page_entities_table_exists(engine: AsyncEngine) -> None:
+    """Verify the ``wiki_page_entities`` join table exists in the public schema."""
     async with engine.connect() as conn:
         assert await _table_exists(conn, "wiki_page_entities")
 
 
 async def test_jobs_table_exists(engine: AsyncEngine) -> None:
+    """Verify the ``jobs`` table exists in the public schema."""
     async with engine.connect() as conn:
         assert await _table_exists(conn, "jobs")
 
@@ -121,6 +129,7 @@ async def test_jobs_table_exists(engine: AsyncEngine) -> None:
 
 
 async def test_sources_status_default_is_pending(engine: AsyncEngine) -> None:
+    """Verify ``sources.status`` column defaults to ``'pending'``."""
     async with engine.connect() as conn:
         default = await _column_default(conn, "sources", "status")
         assert default is not None
@@ -128,6 +137,7 @@ async def test_sources_status_default_is_pending(engine: AsyncEngine) -> None:
 
 
 async def test_chunks_status_default_is_pending(engine: AsyncEngine) -> None:
+    """Verify ``chunks.status`` column defaults to ``'pending'``."""
     async with engine.connect() as conn:
         default = await _column_default(conn, "chunks", "status")
         assert default is not None
@@ -135,6 +145,7 @@ async def test_chunks_status_default_is_pending(engine: AsyncEngine) -> None:
 
 
 async def test_entities_status_default_is_published(engine: AsyncEngine) -> None:
+    """Verify ``entities.status`` column defaults to ``'published'``."""
     async with engine.connect() as conn:
         default = await _column_default(conn, "entities", "status")
         assert default is not None
@@ -142,6 +153,7 @@ async def test_entities_status_default_is_published(engine: AsyncEngine) -> None
 
 
 async def test_relations_status_default_is_published(engine: AsyncEngine) -> None:
+    """Verify ``relations.status`` column defaults to ``'published'``."""
     async with engine.connect() as conn:
         default = await _column_default(conn, "relations", "status")
         assert default is not None
@@ -149,6 +161,7 @@ async def test_relations_status_default_is_published(engine: AsyncEngine) -> Non
 
 
 async def test_wiki_pages_status_default_is_published(engine: AsyncEngine) -> None:
+    """Verify ``wiki_pages.status`` column defaults to ``'published'``."""
     async with engine.connect() as conn:
         default = await _column_default(conn, "wiki_pages", "status")
         assert default is not None
@@ -156,6 +169,7 @@ async def test_wiki_pages_status_default_is_published(engine: AsyncEngine) -> No
 
 
 async def test_jobs_status_default_is_pending(engine: AsyncEngine) -> None:
+    """Verify ``jobs.status`` column defaults to ``'pending'``."""
     async with engine.connect() as conn:
         default = await _column_default(conn, "jobs", "status")
         assert default is not None
@@ -168,27 +182,32 @@ async def test_jobs_status_default_is_pending(engine: AsyncEngine) -> None:
 
 
 async def test_chunks_composite_index_exists(engine: AsyncEngine) -> None:
+    """Verify the composite index on ``chunks (source_id, chunk_index)`` exists."""
     async with engine.connect() as conn:
         assert await _index_exists(conn, "idx_chunks_source_id_chunk_index")
 
 
 async def test_relations_composite_index_exists(engine: AsyncEngine) -> None:
+    """Verify the composite index on ``relations (source_entity_id, target_entity_id, relation_type)`` exists."""
     async with engine.connect() as conn:
         assert await _index_exists(conn, "idx_relations_source_target_type")
 
 
 async def test_jobs_composite_index_exists(engine: AsyncEngine) -> None:
+    """Verify the composite index on ``jobs (status, scheduled_at)`` exists."""
     async with engine.connect() as conn:
         assert await _index_exists(conn, "idx_jobs_status_scheduled_at")
 
 
 async def test_chunk_entities_indexes_exist(engine: AsyncEngine) -> None:
+    """Verify both FK indexes exist on ``chunk_entities``."""
     async with engine.connect() as conn:
         assert await _index_exists(conn, "idx_chunk_entities_chunk_id")
         assert await _index_exists(conn, "idx_chunk_entities_entity_id")
 
 
 async def test_wiki_page_entities_indexes_exist(engine: AsyncEngine) -> None:
+    """Verify both FK indexes exist on ``wiki_page_entities``."""
     async with engine.connect() as conn:
         assert await _index_exists(conn, "idx_wiki_page_entities_wiki_page_id")
         assert await _index_exists(conn, "idx_wiki_page_entities_entity_id")
@@ -200,6 +219,7 @@ async def test_wiki_page_entities_indexes_exist(engine: AsyncEngine) -> None:
 
 
 async def test_wiki_pages_slug_unique(engine: AsyncEngine) -> None:
+    """Verify a unique index exists on ``wiki_pages.slug``."""
     async with engine.connect() as conn:
         result = await conn.execute(
             text(
@@ -214,6 +234,7 @@ async def test_wiki_pages_slug_unique(engine: AsyncEngine) -> None:
 
 
 async def test_wiki_pages_entity_id_unique(engine: AsyncEngine) -> None:
+    """Verify a unique index exists on ``wiki_pages.entity_id``."""
     async with engine.connect() as conn:
         result = await conn.execute(
             text(
@@ -233,6 +254,7 @@ async def test_wiki_pages_entity_id_unique(engine: AsyncEngine) -> None:
 
 
 async def test_create_source_and_chunk(db: AsyncSession) -> None:
+    """Create a Source and Chunk via ORM and verify they persist correctly."""
     source = Source(
         file_path="/tmp/test.pdf",
         file_name="test.pdf",
@@ -261,6 +283,7 @@ async def test_create_source_and_chunk(db: AsyncSession) -> None:
 
 
 async def test_create_entity_and_relation(db: AsyncSession) -> None:
+    """Create two Entities and a Relation between them via ORM and verify persistence."""
     source = Source(
         file_path="/tmp/test.pdf",
         file_name="test.pdf",
@@ -310,6 +333,7 @@ async def test_create_entity_and_relation(db: AsyncSession) -> None:
 
 
 async def test_create_wiki_page(db: AsyncSession) -> None:
+    """Create a WikiPage linked to an Entity via ORM and verify persistence."""
     entity = Entity(
         name="Alice",
         entity_type="person",
@@ -337,6 +361,7 @@ async def test_create_wiki_page(db: AsyncSession) -> None:
 
 
 async def test_create_job(db: AsyncSession) -> None:
+    """Create a Job via ORM and verify default ``attempts`` and ``max_retries``."""
     job = Job(
         job_type="ingest",
         payload={"source_id": str(uuid.uuid4())},
@@ -364,6 +389,7 @@ async def test_create_job(db: AsyncSession) -> None:
 
 
 async def test_chunk_entity_link(db: AsyncSession) -> None:
+    """Create a ChunkEntity join row and verify it round-trips."""
     source = Source(
         file_path="/tmp/test.pdf",
         file_name="test.pdf",
@@ -403,6 +429,7 @@ async def test_chunk_entity_link(db: AsyncSession) -> None:
 
 
 async def test_wiki_page_entity_link(db: AsyncSession) -> None:
+    """Create a WikiPageEntity join row and verify it round-trips."""
     entity = Entity(
         name="Alice",
         entity_type="person",
