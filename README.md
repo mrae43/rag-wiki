@@ -78,11 +78,21 @@ Enterprise knowledge bases contain sensitive documents — internal research, cu
 |---|---|
 | OpenAI | GPT-4o, GPT-4o-mini, text-embedding-3-* |
 | Azure OpenAI | Same client, `base_url` + `api_version` config |
-| Anthropic | Claude 3.5 Sonnet, Claude 3 Haiku |
+| Anthropic | Stub — only OpenAI provider is implemented (see `rag_wiki/providers/anthropic.py`) |
 | vLLM | Any OpenAI-compatible self-hosted model |
 | Ollama | Local models (Llama 3, Mistral, etc.) |
 
 Different operations can use different models — e.g. a cheap/fast model for captioning, a stronger model for wiki synthesis. Configured via env vars per operation.
+
+---
+
+## Setup
+
+Choose the setup path that fits your environment:
+
+- **Docker (recommended)** — start the full stack (API + worker + Postgres) with a single command. See [Quickstart](#quickstart).
+- **Local (no Docker)** — run directly on your host for faster iteration or IDE debugging. See [Local development](#local-development-without-docker).
+- **Production** — deploy with Helm on Kubernetes for multi-replica, managed Postgres, and enterprise configuration. See [Deployment](#deployment).
 
 ---
 
@@ -234,16 +244,13 @@ pytest --cov=rag_wiki --cov-fail-under=60
 
 ## Optional: full multimodal parsing (MinerU)
 
+> 🔲 **MinerU integration is not yet implemented.** The `PARSER` env var and
+> `rag-wiki[mineru]` extra are defined in `settings.py`/`pyproject.toml`, but
+> the parser dispatch does not yet handle `"mineru"` — it raises a `ParseError`.
+> Implementation is tracked as a planned roadmap item.
+
 By default, the lightweight parser (PyMuPDF + unstructured) handles PDFs, DOCX,
-and markdown. For GPU-accelerated full multimodal parsing (tables, images,
-equations as distinct typed chunks):
-
-```bash
-uv pip install rag-wiki[mineru]
-```
-
-Then set `PARSER=mineru` in `.env`. MinerU is optional — the system runs fully
-without it.
+and markdown. The system runs fully without MinerU.
 
 ---
 
@@ -269,56 +276,8 @@ helm install rag-wiki ./helm/rag-wiki -f values.yaml
 
 ## Project structure
 
-```
-rag_wiki/
-  main.py          # FastAPI app
-  worker.py        # Background job worker
-  cli.py           # CLI (rag-wiki export, ...)
-  settings.py      # Pydantic-settings config
-  exceptions.py    # Domain exception hierarchy
-  api/             # FastAPI routes, schemas, middleware, dependencies
-  providers/       # LLMProvider implementations (base.py, openai.py)
-  ingest/
-    pipeline.py    # Full ingestion orchestrator
-    parser.py      # MIME-based routing into parsing backends
-    chunking.py    # Chunk splitting with configurable overlap
-    schemas.py     # ParsedChunk discriminated union
-    parsers/       # pdf.py, simple.py, unstructured.py
-  graph/
-    extraction.py  # Entity/relation extraction from chunks
-    schemas.py     # Graph models (Entity, Relation, etc.)
-    resolution.py  # Real-time entity resolution (embedding + LLM merge)
-    merge.py       # Hard merge of duplicate entities with FK repointing
-  retrieval/       # Hybrid retrieval (seed, traverse, assemble)
-    seeds.py       # Vector search seed finding
-    traversal.py   # Recursive CTE graph traversal
-    context.py     # Token-budgeted context assembly
-    scoring.py     # Result scoring and deduplication
-    schemas.py     # RetrievalResult, ContextWindow, etc.
-  wiki/            # Wiki page synthesis
-    synthesis.py   # Entity page + source summary orchestration
-    context.py     # 5-tier context construction
-    slug.py        # Deterministic URL-safe slug generation
-    templates/     # Jinja2 templates (synthesize_entity.j2, ...)
-  jobs/            # Job queue (enqueue, claim, complete, fail)
-  db/
-    models/        # graph.py, wiki.py, jobs.py, source.py, index.py (Chunk lives here)
-    session.py     # Async session factory
-    base.py        # Declarative base
-tests/             # Mirrors rag_wiki/ structure
-docs/
-  adr/             # Architecture Decision Records (ADR-0001 to ADR-0013)
-  api.md           # HTTP API reference
-  coding-standards.md
-  tech-stack.md
-  agent-harness.md
-  harness-engineering.md
-  llm-wiki.md
-  docs-convention.md
-  prd/             # Product Requirement Documents (6 PRDs)
-AGENTS.md          # Guidance for LLM coding agents (Claude Code, OpenCode, etc.)
-CONTEXT.md         # Domain terminology glossary
-```
+[See `[#Project Structure]` in `AGENTS.md`](AGENTS.md#package-layout) — it is the
+single source of truth for the package layout and test mirroring conventions.
 
 ---
 
@@ -326,7 +285,7 @@ CONTEXT.md         # Domain terminology glossary
 
 | Status | Item |
 |---|---|
-| ✅ Done | Architecture decisions (12 ADRs) |
+| ✅ Done | Architecture decisions (13 ADRs) |
 | ✅ Done | Coding standards, tech stack, agent guidance |
 | ✅ Done | Database schema + Alembic migrations |
 | ✅ Done | Lightweight parsing pipeline |

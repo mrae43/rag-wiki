@@ -90,8 +90,9 @@ rewrite. (ADR-0005)
 Auth/RBAC is scoped to users within one organization's deployment. (ADR-0004)
 
 **Hybrid parsing pipeline** — lightweight default (pymupdf + unstructured);
-optional MinerU path via `uv pip install rag-wiki[mineru]`, feature-flagged. Both
-paths produce the same chunk interface. (ADR-0002)
+MinerU path defined as optional dep (`uv pip install rag-wiki[mineru]`) and
+accepted in `settings.py`, but the parser dispatch does not yet handle
+`"mineru"`. Both paths target the same chunk interface. (ADR-0002)
 
 **Hybrid retrieval, single mode for v1** ✅ — vector search seeds → recursive CTE
 graph traversal → combined context. No multiple selectable modes in v1, but
@@ -137,6 +138,12 @@ rag_wiki/
   cli.py               # CLI commands (rag-wiki ingest, rag-wiki export, ...)
   settings.py          # pydantic-settings config (all env vars)
   exceptions.py        # Domain exception hierarchy rooted in RagWikiError
+  api/                 # FastAPI routes, schemas, dependencies, middleware
+    router.py            # Top-level router mount
+    routes/              # Per-resource route modules
+    schemas.py           # Request/response schemas
+    dependencies.py      # FastAPI dependency injection
+    middleware.py        # Custom middleware (error handling, etc.)
   providers/           # ChatProvider + EmbeddingProvider implementations
     base.py              # Protocols (ChatProvider, EmbeddingProvider, data models)
     openai.py            # Full implementation (complete, embed, caption_image)
@@ -144,7 +151,7 @@ rag_wiki/
     __init__.py          # Retry wrapper, provider registry, get_chat_provider()
   ingest/              # Parse → chunk → caption → embed → extract → resolve pipeline
   graph/               # extraction.py, resolution.py, merge.py, schemas.py
-  retrieval/           # Hybrid retrieval (seeds.py, traversal.py, context.py, scoring.py, schemas.py)
+  retrieval/           # Hybrid retrieval (seeds.py, traversal.py, context.py, scoring.py, schemas.py, orchestrator.py)
   wiki/                # Wiki synthesis (synthesis.py, context.py, slug.py, templates/)
   jobs/                # Job queue (enqueue, claim_next, complete_job, fail_job)
   db/
@@ -159,6 +166,7 @@ tests/
   retrieval/
   wiki/
   jobs/
+  api/                 # API route tests
   conftest.py            # Shared fixtures
   test_smoke.py          # Top-level smoke tests
 ```
