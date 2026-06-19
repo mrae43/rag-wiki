@@ -77,9 +77,11 @@ class FakeChatProvider:
     """
 
     def __init__(self, response_map: dict[str, str] | None = None) -> None:
+        """Init with optional response map mapping tool names to canned JSON."""
         self.response_map = response_map or {}
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Return a fake response, using the response map if a tool name matches."""
         if request.tools and self.response_map:
             # Return the first matching tool response from the map.
             for tool in request.tools:
@@ -113,6 +115,7 @@ class FakeChatProvider:
         image_mime_type: str,
         model: str,
     ) -> str:
+        """Return a fake caption string based on the image MIME type."""
         return f"fake-caption-{image_mime_type}"
 
 
@@ -120,6 +123,7 @@ class FakeEmbeddingProvider:
     """Test double that satisfies the EmbeddingProvider protocol."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Return a zero-filled embedding vector for each input text."""
         dims = get_settings().embedding_dimensions
         return [[0.0] * dims for _ in texts]
 

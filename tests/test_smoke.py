@@ -14,10 +14,12 @@ from rag_wiki.settings import Settings
 
 
 def test_package_imports() -> None:
+    """Verify the rag_wiki package imports successfully and has a docstring."""
     assert rag_wiki.__doc__ is not None
 
 
 def test_exception_hierarchy() -> None:
+    """Verify all custom exceptions inherit from RagWikiError and are distinct types."""
     assert issubclass(LLMProviderError, RagWikiError)
     assert issubclass(EntityResolutionError, RagWikiError)
     assert issubclass(IngestError, RagWikiError)
@@ -27,6 +29,7 @@ def test_exception_hierarchy() -> None:
 
 
 def test_settings_defaults() -> None:
+    """Verify default values of critical Settings fields match expectations."""
     fields = Settings.model_fields
     assert fields["llm_provider"].default == "openai"
     assert fields["embedding_dimensions"].default == 3072
@@ -39,5 +42,6 @@ def test_settings_defaults() -> None:
 
 
 def test_fastapi_app_creates() -> None:
+    """Verify the FastAPI app is created with the expected title and is not None."""
     assert fastapi_app.title == "RagWiki API"
     assert fastapi_app is not None

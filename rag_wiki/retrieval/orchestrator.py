@@ -16,6 +16,7 @@ import uuid
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from rag_wiki.exceptions import RetrievalError
 from rag_wiki.providers.base import EmbeddingProvider
 from rag_wiki.retrieval.context import assemble_context
 from rag_wiki.retrieval.schemas import RetrievalResult
@@ -62,34 +63,43 @@ async def retrieve(
     if max_context_tokens is None:
         max_context_tokens = settings.retrieval_total_budget_tokens
 
-    # 1. Embed query once.
-    query_embeddings = await embed_provider.embed(
-        [query], model=settings.embedding_model
-    )
-    query_embedding = query_embeddings[0]
+    try:
+        # 1. Embed query once.
+        query_embeddings = await embed_provider.embed(
+            [query], model=settings.embedding_model
+        )
+        query_embedding = query_embeddings[0]
 
-    # 2. Find seeds.
-    seeds = await find_seeds(
-        query_embedding=query_embedding,
-        db=db,
-        embed_provider=embed_provider,
-        seed_entity_ids=seed_entity_ids,
-    )
+        # 2. Find seeds.
+        seeds = await find_seeds(
+            query_embedding=query_embedding,
+            db=db,
+            embed_provider=embed_provider,
+            seed_entity_ids=seed_entity_ids,
+        )
 
-    # 3. Traverse graph.
-    seed_ids = [s.entity_id for s in seeds]
-    traversal = await traverse(seed_ids, db)
+        # 3. Traverse graph.
+        seed_ids = [s.entity_id for s in seeds]
+        traversal = await traverse(seed_ids, db)
 
-    # 4. Assemble context.
-    result = await assemble_context(
-        query=query,
-        query_embedding=query_embedding,
-        seeds=seeds,
-        traversal=traversal,
-        db=db,
-        embed_provider=embed_provider,
-        max_context_tokens=max_context_tokens,
-    )
+        # 4. Assemble context.
+        result = await assemble_context(
+            query=query,
+            query_embedding=query_embedding,
+            seeds=seeds,
+            traversal=traversal,
+            db=db,
+            embed_provider=embed_provider,
+            max_context_tokens=max_context_tokens,
+        )
+    except Exception as exc:
+        logger.error(
+            "retrieval_failed",
+            query=query,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        raise RetrievalError(f"Retrieval pipeline failed for query {query!r}") from exc
 
     logger.info(
         "retrieval_complete",

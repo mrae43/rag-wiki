@@ -21,9 +21,11 @@ class FakeChatProvider:
     """Configurable fake chat provider for resolution tests."""
 
     def __init__(self, response_map: dict[str, str] | None = None) -> None:
+        """Initialise with optional response_map mapping tool names to canned JSON."""
         self.response_map = response_map or {}
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Return a canned CompletionResponse matching response_map, or a default."""
         if request.tools and self.response_map:
             for tool in request.tools:
                 if tool.name in self.response_map:
@@ -49,6 +51,7 @@ class FakeChatProvider:
     async def caption_image(
         self, image_bytes: bytes, image_mime_type: str, model: str
     ) -> str:
+        """Return a deterministic fake caption string."""
         return "fake-caption"
 
 
@@ -56,17 +59,20 @@ class FakeEmbeddingProvider:
     """Deterministic embedding provider."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Return zero-filled embedding vectors of configured dims for each text."""
         dims = get_settings().embedding_dimensions
         return [[0.0] * dims for _ in texts]
 
 
 @pytest.fixture
 def mock_chat_provider() -> FakeChatProvider:
+    """Return a default FakeChatProvider with no canned responses."""
     return FakeChatProvider()
 
 
 @pytest.fixture
 def mock_embedding_provider() -> FakeEmbeddingProvider:
+    """Return a deterministic FakeEmbeddingProvider."""
     return FakeEmbeddingProvider()
 
 

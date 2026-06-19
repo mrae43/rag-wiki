@@ -69,6 +69,7 @@ async def test_wiki_page_section_priority_truncation(
     db: AsyncSession,
     mock_embedding_provider: EmbeddingProvider,
 ) -> None:
+    """Verify wiki page sections are prioritized and truncated within token budget."""
     dims = get_settings().embedding_dimensions
     seed = await _make_entity(db, "WikiSeed")
     page = WikiPage(
@@ -127,6 +128,7 @@ async def test_seed_vs_hop_chunk_assignment(
     db: AsyncSession,
     mock_embedding_provider: EmbeddingProvider,
 ) -> None:
+    """Verify seed chunks and hop-1 chunks are assigned to separate lists."""
     dims = get_settings().embedding_dimensions
     src = await _make_source(db)
     seed = await _make_entity(db, "Seed")
@@ -185,6 +187,7 @@ async def test_context_no_seeds_empty_result(
     db: AsyncSession,
     mock_embedding_provider: EmbeddingProvider,
 ) -> None:
+    """Verify assemble_context returns an empty result when no seeds are provided."""
     dims = get_settings().embedding_dimensions
     result = await assemble_context(
         query="test",

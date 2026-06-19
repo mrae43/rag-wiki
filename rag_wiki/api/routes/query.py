@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.api.dependencies import get_chat_provider, get_db, get_embedding_provider
+from rag_wiki.exceptions import RetrievalError
 from rag_wiki.providers.base import (
     ChatProvider,
     CompletionRequest,
@@ -157,13 +158,20 @@ async def create_query(
     """
     logger.info("query_received", query=request.query)
 
-    retrieval = await retrieve(
-        query=request.query,
-        db=db,
-        embed_provider=embed_provider,
-        max_context_tokens=request.max_context_tokens,
-        seed_entity_ids=request.seed_entity_ids,
-    )
+    try:
+        retrieval = await retrieve(
+            query=request.query,
+            db=db,
+            embed_provider=embed_provider,
+            max_context_tokens=request.max_context_tokens,
+            seed_entity_ids=request.seed_entity_ids,
+        )
+    except RetrievalError:
+        raise
+    except Exception as exc:
+        raise RetrievalError(
+            f"Failed to retrieve context for query {request.query!r}"
+        ) from exc
 
     answer: str | None = None
     if request.generate_answer:

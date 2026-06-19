@@ -26,6 +26,7 @@ class _DeterministicEmbeddingProvider:
         self._dimensions = dimensions
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Return a deterministic unit-vector embedding for each text."""
         return [_vector_for(t, self._dimensions) for t in texts]
 
 

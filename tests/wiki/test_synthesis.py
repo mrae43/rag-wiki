@@ -33,7 +33,10 @@ from rag_wiki.wiki.synthesis import (
 
 
 class FakeEmbeddingProvider(EmbeddingProvider):
+    """Returns zero vectors for any input text."""
+
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Embed texts into zero vectors of configured dimensions."""
         dims = get_settings().embedding_dimensions
         return [[0.0] * dims for _ in texts]
 
@@ -42,14 +45,17 @@ class ReturningChatProvider:
     """Returns canned markdown content for synthesis tests."""
 
     def __init__(self, content: str = "# Test Page\n\nGenerated content.") -> None:
+        """Store canned content for complete() to return."""
         self.content = content
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Return the pre-configured canned content."""
         return CompletionResponse(content=self.content)
 
     async def caption_image(
         self, image_bytes: bytes, image_mime_type: str, model: str
     ) -> str:
+        """Return empty string (no-op for tests)."""
         return ""
 
 
@@ -57,6 +63,7 @@ class FailingChatProvider:
     """Raises LLMProviderError on complete."""
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Raise LLMProviderError to simulate provider failure."""
         from rag_wiki.exceptions import LLMProviderError
 
         raise LLMProviderError("provider failure")
@@ -64,6 +71,7 @@ class FailingChatProvider:
     async def caption_image(
         self, image_bytes: bytes, image_mime_type: str, model: str
     ) -> str:
+        """Return empty string (no-op for tests)."""
         return ""
 
 
