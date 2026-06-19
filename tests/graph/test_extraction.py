@@ -20,19 +20,23 @@ class FakeChatProvider:
     """Minimal fake that can be configured per-test."""
 
     def __init__(self, response: CompletionResponse) -> None:
+        """Initialise with a canned CompletionResponse."""
         self.response = response
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Return the canned CompletionResponse regardless of input."""
         return self.response
 
     async def caption_image(
         self, image_bytes: bytes, image_mime_type: str, model: str
     ) -> str:
+        """Return a deterministic fake caption string."""
         return "fake-caption"
 
 
 @pytest.fixture
 def sample_chunk() -> Chunk:
+    """Return a minimal Chunk fixture with realistic text content."""
     return Chunk(
         id=uuid.uuid4(),
         source_id=uuid.uuid4(),

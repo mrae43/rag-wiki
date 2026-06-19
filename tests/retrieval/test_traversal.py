@@ -104,6 +104,7 @@ async def test_traversal_empty_seeds(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_traversal_total_node_ceiling(db: AsyncSession) -> None:
+    """Verify traverse stops after the total-node ceiling regardless of nodes."""
     # Create a star: seed connected to 5 hop1 entities.
     seed = await _make_entity(db, "StarSeed")
     neighbors = [await _make_entity(db, f"N{i}") for i in range(5)]
@@ -120,6 +121,7 @@ async def test_traversal_per_hop_limit(
     db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Verify per-hop neighbor limit caps traversal breadth at each hop."""
     # Default retrieval_max_neighbors_per_hop is 10; create 15 to exercise it.
     seed = await _make_entity(db, "StarSeed")
     neighbors = [await _make_entity(db, f"N{i}") for i in range(15)]
@@ -136,6 +138,7 @@ async def test_traversal_total_node_ceiling_boundary(
     db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Verify total-node ceiling is binding when per-hop limit is raised."""
     # Raise per-hop limit so the total-node ceiling (50) is the binding constraint.
     settings = Settings(
         database_url="postgresql+asyncpg://test:test@localhost:5432/test",
@@ -158,6 +161,7 @@ async def test_traversal_total_node_ceiling_boundary(
 
 @pytest.mark.asyncio
 async def test_traversal_bidirectional_from_target(db: AsyncSession) -> None:
+    """Verify traverse walks incoming relations (seed is the target, not source)."""
     # seed is the target of a relation.
     source = await _make_entity(db, "Source")
     seed = await _make_entity(db, "Seed")
