@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Codebase Health Check — FastAPI / Pydantic v2 / PostgreSQL / Alembic / SQLAlchemy / pgvector / pytest / ruff / mypy
+Codebase Health Check — FastAPI / Pydantic v2 / PostgreSQL / Alembic
+/ SQLAlchemy / pgvector / pytest / ruff / mypy
 Run from your project root: python healthcheck.py [--path ./src] [--json]
 """
 
@@ -163,7 +164,9 @@ def check_structure(root: Path) -> CheckResult:
                 severity="medium",
                 file=name,
                 line=None,
-                issue=f"Python file '{name}' sits at project root, not inside a package",
+                issue=(
+                    f"Python file '{name}' sits at project root, not inside a package"
+                ),
                 fix="Move into src/ or app/ package directory",
             )
         )
@@ -212,8 +215,14 @@ def check_structure(root: Path) -> CheckResult:
                         severity="low",
                         file=rel(f, root),
                         line=None,
-                        issue=f"Barrel file uses relative parent import '{c}' — possible cross-module coupling",
-                        fix="Only re-export symbols from the same package; cross-package imports belong in services/",
+                        issue=(
+                            f"Barrel file uses relative parent import '{c}'"
+                            " — possible cross-module coupling"
+                        ),
+                        fix=(
+                            "Only re-export symbols from the same package;"
+                            " cross-package imports belong in services/"
+                        ),
                     )
                 )
 
@@ -233,8 +242,6 @@ def check_errors(root: Path) -> CheckResult:
         tree = parse_ast(f)
         if not tree:
             continue
-        src_lines = read_source(f).splitlines()
-
         for node in ast.walk(tree):
             if not isinstance(node, ast.ExceptHandler):
                 continue
@@ -247,8 +254,14 @@ def check_errors(root: Path) -> CheckResult:
                         severity="critical",
                         file=rel(f, root),
                         line=node.lineno,
-                        issue="Bare `except:` catches everything including KeyboardInterrupt and SystemExit",
-                        fix="Replace with `except Exception as e:` and handle or re-raise",
+                        issue=(
+                            "Bare `except:` catches everything including"
+                            " KeyboardInterrupt and SystemExit"
+                        ),
+                        fix=(
+                            "Replace with `except Exception as e:` and handle or"
+                            " re-raise"
+                        ),
                     )
                 )
                 continue
@@ -274,7 +287,10 @@ def check_errors(root: Path) -> CheckResult:
                         file=rel(f, root),
                         line=node.lineno,
                         issue="Empty except block silently swallows exceptions",
-                        fix="Log the error, re-raise, or raise a domain-specific exception",
+                        fix=(
+                            "Log the error, re-raise, or raise a"
+                            " domain-specific exception"
+                        ),
                     )
                 )
                 continue
@@ -301,8 +317,14 @@ def check_errors(root: Path) -> CheckResult:
                         severity="high",
                         file=rel(f, root),
                         line=node.lineno,
-                        issue="Except block logs but does not re-raise — caller has no signal the operation failed",
-                        fix="Add `raise` after logging, or raise a typed AppError with the original as `cause`",
+                        issue=(
+                            "Except block logs but does not re-raise — caller"
+                            " has no signal the operation failed"
+                        ),
+                        fix=(
+                            "Add `raise` after logging, or raise a typed AppError"
+                            " with the original as `cause`"
+                        ),
                     )
                 )
 
@@ -344,8 +366,14 @@ def check_errors(root: Path) -> CheckResult:
                                 severity="high",
                                 file=rel(f, root),
                                 line=node.lineno,
-                                issue=f"Route handler `{node.name}` makes async DB calls without try/except",
-                                fix="Wrap DB operations in try/except and raise HTTPException or a mapped AppError",
+                                issue=(
+                                    f"Route handler `{node.name}` makes async DB calls"
+                                    " without try/except"
+                                ),
+                                fix=(
+                                    "Wrap DB operations in try/except and raise"
+                                    " HTTPException or a mapped AppError"
+                                ),
                             )
                         )
 
@@ -377,7 +405,10 @@ def check_types(root: Path) -> CheckResult:
                     file="pyproject.toml",
                     line=None,
                     issue="No [tool.mypy] section found in pyproject.toml",
-                    fix="Add [tool.mypy] with strict = true, python_version, and plugins = ['pydantic.mypy']",
+                    fix=(
+                        "Add [tool.mypy] with strict = true, python_version,"
+                        " and plugins = ['pydantic.mypy']"
+                    ),
                 )
             )
         elif not has_strict:
@@ -388,7 +419,10 @@ def check_types(root: Path) -> CheckResult:
                     file="pyproject.toml",
                     line=None,
                     issue="mypy configured but strict = true is not set",
-                    fix="Add `strict = true` under [tool.mypy] to enforce no implicit Any",
+                    fix=(
+                        "Add `strict = true` under [tool.mypy] to enforce"
+                        " no implicit Any"
+                    ),
                 )
             )
 
@@ -417,26 +451,24 @@ def check_types(root: Path) -> CheckResult:
         lines = src.splitlines()
 
         # Detect `Any` used as annotation
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Name) and node.id == "Any":
-                # Only flag if it's in an annotation context (heuristic: parent is arg or return)
-                pass  # AST walking for parent context is verbose; use line-level scan below
+        # (placeholder for AST-based detection; line-level scan below handles it)
 
         # Line-level scan for Any in annotations
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
-            if re.search(r":\s*Any\b", stripped) or re.search(r"->\s*Any\b", stripped):
-                if not stripped.startswith("#"):
-                    findings.append(
-                        Finding(
-                            check="types",
-                            severity="high",
-                            file=rel(f, root),
-                            line=i,
-                            issue="Annotation uses `Any` — defeats type checking",
-                            fix="Replace with a concrete type, TypeVar, or Protocol",
-                        )
+            if (
+                re.search(r":\s*Any\b", stripped) or re.search(r"->\s*Any\b", stripped)
+            ) and not stripped.startswith("#"):
+                findings.append(
+                    Finding(
+                        check="types",
+                        severity="high",
+                        file=rel(f, root),
+                        line=i,
+                        issue="Annotation uses `Any` — defeats type checking",
+                        fix="Replace with a concrete type, TypeVar, or Protocol",
                     )
+                )
 
             # unscoped mypy-silence comment
             if "# type: ignore" in stripped and not re.search(
@@ -448,8 +480,14 @@ def check_types(root: Path) -> CheckResult:
                         severity="medium",
                         file=rel(f, root),
                         line=i,
-                        issue="Unscoped `# type: ignore` — suppresses all mypy errors on this line",
-                        fix="Use specific codes: `# type: ignore[assignment]` and add a comment explaining why",
+                        issue=(
+                            "Unscoped `# type: ignore` — suppresses all mypy"
+                            " errors on this line"
+                        ),
+                        fix=(
+                            "Use specific codes: `# type: ignore[assignment]`"
+                            " and add a comment explaining why"
+                        ),
                     )
                 )
 
@@ -469,8 +507,14 @@ def check_types(root: Path) -> CheckResult:
                                 severity="high",
                                 file=rel(f, root),
                                 line=node.lineno,
-                                issue=f"`@validator` used in `{node.name}` — this is Pydantic v1 syntax",
-                                fix="Replace with `@field_validator` (Pydantic v2). Use `model_validator` for cross-field validation",
+                                issue=(
+                                    f"`@validator` used in `{node.name}` — this is"
+                                    " Pydantic v1 syntax"
+                                ),
+                                fix=(
+                                    "Replace with `@field_validator` (Pydantic v2)."
+                                    " Use `model_validator` for cross-field validation"
+                                ),
                             )
                         )
 
@@ -483,7 +527,10 @@ def check_types(root: Path) -> CheckResult:
                         severity="low",
                         file=rel(f, root),
                         line=i,
-                        issue="Uses `Optional[X]` — Pydantic v2 and Python 3.10+ prefer `X | None`",
+                        issue=(
+                            "Uses `Optional[X]` — Pydantic v2 and Python 3.10+"
+                            " prefer `X | None`"
+                        ),
                         fix="Replace `Optional[X]` with `X | None` throughout",
                     )
                 )
@@ -512,8 +559,14 @@ def check_types(root: Path) -> CheckResult:
                                                     severity="high",
                                                     file=rel(f, root),
                                                     line=item.lineno,
-                                                    issue=f"SQLAlchemy column `{target.id}` uses legacy `Column()` without `Mapped[]` annotation",
-                                                    fix="Use `Mapped[type] = mapped_column(...)` (SQLAlchemy 2.0 style)",
+                                                    issue=(
+                                                        "SQLAlchemy column uses legacy"
+                                                        " `Column()` without `Mapped[]`"
+                                                    ),
+                                                    fix=(
+                                                        "Use `Mapped[]` annotation"
+                                                        " with mapped_column()"
+                                                    ),
                                                 )
                                             )
 
@@ -539,7 +592,10 @@ def check_docs(root: Path) -> CheckResult:
                 file="README.md",
                 line=None,
                 issue="README.md is missing",
-                fix="Add README.md with: project purpose, local setup, env vars, how to run tests",
+                fix=(
+                    "Add README.md with: project purpose, local setup,"
+                    " env vars, how to run tests"
+                ),
             )
         )
     else:
@@ -559,7 +615,6 @@ def check_docs(root: Path) -> CheckResult:
 
     # env example
     env_example = root / ".env.example"
-    env_file = root / ".env"
     if not env_example.exists():
         findings.append(
             Finding(
@@ -567,8 +622,14 @@ def check_docs(root: Path) -> CheckResult:
                 severity="high",
                 file=".env.example",
                 line=None,
-                issue=".env.example is missing — collaborators won't know which env vars are required",
-                fix="Create .env.example with all variable names and placeholder values (no real secrets)",
+                issue=(
+                    ".env.example is missing — collaborators won't"
+                    " know which env vars are required"
+                ),
+                fix=(
+                    "Create .env.example with all variable names"
+                    " and placeholder values (no real secrets)"
+                ),
             )
         )
 
@@ -606,7 +667,10 @@ def check_docs(root: Path) -> CheckResult:
                             file=rel(f, root),
                             line=node.lineno,
                             issue=f"Public {kind} `{node.name}` has no docstring",
-                            fix="Add a one-line docstring describing what it does, its params, and return value",
+                            fix=(
+                                "Add a one-line docstring describing what it does,"
+                                " its params, and return value"
+                            ),
                         )
                     )
 
@@ -634,8 +698,14 @@ def check_docs(root: Path) -> CheckResult:
                                 severity="medium",
                                 file=rel(f, root),
                                 line=node.lineno,
-                                issue=f"FastAPI route `{node.name}` has no docstring or summary= — missing from OpenAPI spec",
-                                fix="Add a docstring (FastAPI uses it as the OpenAPI description) or pass summary='...'",
+                                issue=(
+                                    f"FastAPI route `{node.name}` has no docstring or"
+                                    " summary= — missing from OpenAPI spec"
+                                ),
+                                fix=(
+                                    "Add a docstring (FastAPI uses it as the OpenAPI"
+                                    " description) or pass summary='...'"
+                                ),
                             )
                         )
 
@@ -694,7 +764,10 @@ def check_tests(root: Path) -> CheckResult:
                 file="tests/conftest.py",
                 line=None,
                 issue="No conftest.py found in tests/ — missing shared fixtures",
-                fix="Add conftest.py with at least: async_session fixture, test DB setup/teardown, and app client fixture",
+                fix=(
+                    "Add conftest.py with at least: async_session fixture,"
+                    " test DB setup/teardown, and app client fixture"
+                ),
             )
         )
 
@@ -709,7 +782,10 @@ def check_tests(root: Path) -> CheckResult:
                     severity="high",
                     file="pyproject.toml",
                     line=None,
-                    issue="pytest-asyncio mode not configured — async route tests may silently not run",
+                    issue=(
+                        "pytest-asyncio mode not configured — async route"
+                        " tests may silently not run"
+                    ),
                     fix="Add under [tool.pytest.ini_options]: asyncio_mode = 'auto'",
                 )
             )
@@ -743,7 +819,10 @@ def check_tests(root: Path) -> CheckResult:
                         file=rel(f, root),
                         line=node.lineno,
                         issue=f"Test `{node.name}` has no assertions — always passes",
-                        fix="Add assert statements or use pytest.raises() for exception testing",
+                        fix=(
+                            "Add assert statements or use pytest.raises()"
+                            " for exception testing"
+                        ),
                     )
                 )
 
@@ -751,18 +830,23 @@ def check_tests(root: Path) -> CheckResult:
         for i, line in enumerate(lines, 1):
             if re.search(
                 r"datetime\.now\(\)|time\.time\(\)|datetime\.utcnow\(\)", line
-            ):
-                if not re.search(r"mock|patch|freeze", line.lower()):
-                    findings.append(
-                        Finding(
-                            check="tests",
-                            severity="medium",
-                            file=rel(f, root),
-                            line=i,
-                            issue="Test uses real datetime/time — non-deterministic across runs",
-                            fix="Use `freezegun` or `pytest-freezer` to freeze time in tests",
-                        )
+            ) and not re.search(r"mock|patch|freeze", line.lower()):
+                findings.append(
+                    Finding(
+                        check="tests",
+                        severity="medium",
+                        file=rel(f, root),
+                        line=i,
+                        issue=(
+                            "Test uses real datetime/time — non-deterministic"
+                            " across runs"
+                        ),
+                        fix=(
+                            "Use `freezegun` or `pytest-freezer` to freeze"
+                            " time in tests"
+                        ),
                     )
+                )
 
         # Hardcoded DB URLs in tests
         for i, line in enumerate(lines, 1):
@@ -791,8 +875,14 @@ def check_tests(root: Path) -> CheckResult:
                 severity="high",
                 file="tests/",
                 line=None,
-                issue=f"Low test-to-source ratio: {len(test_files)} test files for {len(src_files)} source files ({ratio:.0%})",
-                fix="Aim for at least one test file per module in services/, routers/, and domain/",
+                issue=(
+                    f"Low test-to-source ratio: {len(test_files)} test files"
+                    f" for {len(src_files)} source files ({ratio:.0%})"
+                ),
+                fix=(
+                    "Aim for at least one test file per module in"
+                    " services/, routers/, and domain/"
+                ),
             )
         )
 
@@ -839,7 +929,10 @@ def check_security(root: Path) -> CheckResult:
                             file=rel(f, root),
                             line=i,
                             issue=f"{label} found in source code",
-                            fix="Move to environment variable; use python-decouple or pydantic-settings BaseSettings",
+                            fix=(
+                                "Move to environment variable; use python-decouple"
+                                " or pydantic-settings BaseSettings"
+                            ),
                         )
                     )
 
@@ -882,8 +975,14 @@ def check_security(root: Path) -> CheckResult:
                         severity="critical",
                         file=rel(f, root),
                         line=i,
-                        issue="f-string used directly in DB execute/query call — SQL injection risk",
-                        fix="Use parameterised queries: `session.execute(text('... :param'), {'param': val})`",
+                        issue=(
+                            "f-string used directly in DB execute/query call —"
+                            " SQL injection risk"
+                        ),
+                        fix=(
+                            "Use parameterised queries:"
+                            " `session.execute(text('... :param'), {'param': val})`"
+                        ),
                     )
                 )
             # text() without bindparams
@@ -894,8 +993,14 @@ def check_security(root: Path) -> CheckResult:
                         severity="critical",
                         file=rel(f, root),
                         line=i,
-                        issue="SQLAlchemy text() called with f-string — SQL injection risk",
-                        fix="Use bind parameters: `text('SELECT ... WHERE id = :id').bindparams(id=value)`",
+                        issue=(
+                            "SQLAlchemy text() called with f-string —"
+                            " SQL injection risk"
+                        ),
+                        fix=(
+                            "Use bind parameters:"
+                            " `text('SELECT ... WHERE id = :id').bindparams(id=value)`"
+                        ),
                     )
                 )
 
@@ -912,8 +1017,15 @@ def check_security(root: Path) -> CheckResult:
                 severity="high",
                 file="src/config.py (expected)",
                 line=None,
-                issue="No BaseSettings class found — environment configuration may not be validated at startup",
-                fix="Create a Settings(BaseSettings) class using pydantic-settings; validate all required env vars on startup",
+                issue=(
+                    "No BaseSettings class found — environment configuration"
+                    " may not be validated at startup"
+                ),
+                fix=(
+                    "Create a Settings(BaseSettings) class using"
+                    " pydantic-settings; validate all required env vars"
+                    " on startup"
+                ),
             )
         )
 
@@ -930,8 +1042,17 @@ def check_security(root: Path) -> CheckResult:
                         severity="medium",
                         file=rel(f, root),
                         line=None,
-                        issue="Vector column found but no HNSW or IVFFlat index detected — similarity search will be slow (full scan)",
-                        fix="Add index in Alembic migration: `op.create_index('ix_embedding', 'table', ['embedding'], postgresql_using='hnsw', postgresql_with={'m': 16, 'ef_construction': 64})`",
+                        issue=(
+                            "Vector column found but no HNSW or IVFFlat index"
+                            " detected — similarity search will be slow (full"
+                            " scan)"
+                        ),
+                        fix=(
+                            "Add index in Alembic migration:"
+                            " `op.create_index('ix_embedding', 'table',"
+                            " ['embedding'], postgresql_using='hnsw',"
+                            " postgresql_with={'m': 16, 'ef_construction': 64})`"
+                        ),
                     )
                 )
             break
@@ -987,8 +1108,15 @@ def check_performance(root: Path) -> CheckResult:
                         severity="high",
                         file=rel(f, root),
                         line=node.lineno,
-                        issue=f"Potential N+1: DB call inside a loop at line {node.lineno}",
-                        fix="Use selectinload() or joinedload() on the relationship, or batch with a single WHERE IN query",
+                        issue=(
+                            f"Potential N+1: DB call inside a loop at line"
+                            f" {node.lineno}"
+                        ),
+                        fix=(
+                            "Use selectinload() or joinedload() on the"
+                            " relationship, or batch with a single WHERE IN"
+                            " query"
+                        ),
                     )
                 )
 
@@ -1001,7 +1129,11 @@ def check_performance(root: Path) -> CheckResult:
                         severity="medium",
                         file=rel(f, root),
                         line=i,
-                        issue="SELECT * fetches all columns — may pull large/unused data (especially with vector columns)",
+                        issue=(
+                            "SELECT * fetches all columns — may pull"
+                            " large/unused data (especially with vector"
+                            " columns)"
+                        ),
                         fix="Enumerate only the columns your code actually uses",
                     )
                 )
@@ -1043,8 +1175,14 @@ def check_performance(root: Path) -> CheckResult:
                         severity="high",
                         file=rel(f, root),
                         line=node.lineno,
-                        issue=f"GET route `{node.name}` queries DB without pagination params (limit/offset)",
-                        fix="Add `limit: int = 50, offset: int = 0` params and apply `.limit(limit).offset(offset)` to query",
+                        issue=(
+                            f"GET route `{node.name}` queries DB without"
+                            " pagination params (limit/offset)"
+                        ),
+                        fix=(
+                            "Add `limit: int = 50, offset: int = 0` params"
+                            " and apply `.limit(limit).offset(offset)` to query"
+                        ),
                     )
                 )
 
@@ -1067,8 +1205,16 @@ def check_performance(root: Path) -> CheckResult:
                                 line=child.lineno
                                 if hasattr(child, "lineno")
                                 else node.lineno,
-                                issue=f"Blocking call `{call_str[:60]}` inside async function `{node.name}` — blocks the event loop",
-                                fix="Use `await asyncio.sleep()` instead of `time.sleep()`; use `httpx.AsyncClient` instead of `requests`",
+                                issue=(
+                                    f"Blocking call `{call_str[:60]}` inside async"
+                                    f" function `{node.name}` — blocks the event"
+                                    " loop"
+                                ),
+                                fix=(
+                                    "Use `await asyncio.sleep()` instead of"
+                                    " `time.sleep()`; use `httpx.AsyncClient`"
+                                    " instead of `requests`"
+                                ),
                             )
                         )
 
@@ -1095,8 +1241,14 @@ def check_scalability(root: Path) -> CheckResult:
                     severity="high",
                     file="pyproject.toml",
                     line=None,
-                    issue="pydantic-settings not in dependencies — env config may be ad-hoc",
-                    fix="Add pydantic-settings and define a BaseSettings class for all config",
+                    issue=(
+                        "pydantic-settings not in dependencies — env config"
+                        " may be ad-hoc"
+                    ),
+                    fix=(
+                        "Add pydantic-settings and define a BaseSettings"
+                        " class for all config"
+                    ),
                 )
             )
 
@@ -1115,7 +1267,10 @@ def check_scalability(root: Path) -> CheckResult:
                 file="src/routers/ (expected)",
                 line=None,
                 issue="No health check endpoint detected (/health, /ping, /healthz)",
-                fix="Add GET /health that returns {status: ok} and checks DB connectivity — required for k8s/load balancers",
+                fix=(
+                    "Add GET /health that returns {status: ok} and checks"
+                    " DB connectivity — required for k8s/load balancers"
+                ),
             )
         )
 
@@ -1152,8 +1307,14 @@ def check_scalability(root: Path) -> CheckResult:
                                         severity="high",
                                         file=rel(f, root),
                                         line=node.lineno,
-                                        issue=f"Module-level mutable `{target.id}` looks like in-memory state — breaks horizontal scaling",
-                                        fix="Move to Redis or a shared store; never rely on per-process memory for shared state",
+                                        issue=(
+                                            "Module-level mutable state"
+                                            " breaks horizontal scaling"
+                                        ),
+                                        fix=(
+                                            "Use a shared store like Redis"
+                                            " for cross-process state"
+                                        ),
                                     )
                                 )
 
@@ -1169,7 +1330,10 @@ def check_scalability(root: Path) -> CheckResult:
                 file="alembic/ (expected)",
                 line=None,
                 issue="No Alembic migrations directory found",
-                fix="Run `alembic init alembic` and configure env.py to point at your SQLAlchemy metadata",
+                fix=(
+                    "Run `alembic init alembic` and configure env.py"
+                    " to point at your SQLAlchemy metadata"
+                ),
             )
         )
     else:
@@ -1181,8 +1345,13 @@ def check_scalability(root: Path) -> CheckResult:
                     severity="medium",
                     file=str(migration_path),
                     line=None,
-                    issue="Alembic directory found but no version migration files exist",
-                    fix="Generate your initial migration: `alembic revision --autogenerate -m 'initial'`",
+                    issue=(
+                        "Alembic directory found but no version migration files exist"
+                    ),
+                    fix=(
+                        "Generate your initial migration:"
+                        " `alembic revision --autogenerate -m 'initial'`"
+                    ),
                 )
             )
 
@@ -1213,8 +1382,14 @@ def check_scalability(root: Path) -> CheckResult:
                         severity="high",
                         file=rel(f, root),
                         line=item.lineno,
-                        issue=f"Route `{item.name}` uses asyncio.create_task — fire-and-forget, task lost on process restart",
-                        fix="Use FastAPI BackgroundTasks for lightweight tasks, or Celery/ARQ for durable background jobs",
+                        issue=(
+                            f"Route `{item.name}` uses asyncio.create_task —"
+                            " fire-and-forget, task lost on process restart"
+                        ),
+                        fix=(
+                            "Use FastAPI BackgroundTasks for lightweight"
+                            " tasks, or Celery/ARQ for durable background jobs"
+                        ),
                     )
                 )
 
@@ -1244,7 +1419,10 @@ def check_consistency(root: Path) -> CheckResult:
                     file="pyproject.toml",
                     line=None,
                     issue="No [tool.ruff] section in pyproject.toml",
-                    fix="Add ruff config with select = ['E','F','I','UP','B','SIM'] and line-length = 88",
+                    fix=(
+                        "Add ruff config with select = ['E','F','I','UP','B',"
+                        "'SIM'] and line-length = 88"
+                    ),
                 )
             )
         else:
@@ -1255,8 +1433,14 @@ def check_consistency(root: Path) -> CheckResult:
                         severity="medium",
                         file="pyproject.toml",
                         line=None,
-                        issue="ruff configured but no rule select — using minimal defaults only",
-                        fix="Add select = ['E','F','I','UP','B','SIM','ANN'] to catch more issues",
+                        issue=(
+                            "ruff configured but no rule select — using minimal"
+                            " defaults only"
+                        ),
+                        fix=(
+                            "Add select = ['E','F','I','UP','B','SIM','ANN']"
+                            " to catch more issues"
+                        ),
                     )
                 )
 
@@ -1279,22 +1463,25 @@ def check_consistency(root: Path) -> CheckResult:
                             file=rel(f, root),
                             line=node.lineno,
                             issue=f"Class `{node.name}` is not PascalCase",
-                            fix=f"Rename to `{''.join(w.capitalize() for w in re.split(r'[_-]', node.name))}`",
+                            fix="Rename to PascalCase",
                         )
                     )
             # Function names should be snake_case
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if re.search(r"[A-Z]", node.name) and not node.name.startswith("_"):
-                    findings.append(
-                        Finding(
-                            check="consistency",
-                            severity="low",
-                            file=rel(f, root),
-                            line=node.lineno,
-                            issue=f"Function `{node.name}` is not snake_case",
-                            fix="Rename to snake_case",
-                        )
+            if (
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and re.search(r"[A-Z]", node.name)
+                and not node.name.startswith("_")
+            ):
+                findings.append(
+                    Finding(
+                        check="consistency",
+                        severity="low",
+                        file=rel(f, root),
+                        line=node.lineno,
+                        issue=f"Function `{node.name}` is not snake_case",
+                        fix="Rename to snake_case",
                     )
+                )
 
     # Commented-out code (heuristic)
     for f in py_files(root):
@@ -1321,7 +1508,10 @@ def check_consistency(root: Path) -> CheckResult:
                                 file=rel(f, root),
                                 line=i,
                                 issue="Block of commented-out code detected",
-                                fix="Delete dead code — version control preserves history",
+                                fix=(
+                                    "Delete dead code — version control preserves"
+                                    " history"
+                                ),
                             )
                         )
                         consecutive_commented = 0
@@ -1333,9 +1523,9 @@ def check_consistency(root: Path) -> CheckResult:
     for f in py_files(root):
         lines = read_source(f).splitlines()
         import_lines = [
-            (i + 1, l)
-            for i, l in enumerate(lines)
-            if l.startswith("import ") or l.startswith("from ")
+            (i + 1, line)
+            for i, line in enumerate(lines)
+            if line.startswith("import ") or line.startswith("from ")
         ]
         if len(import_lines) > 3:
             # Simple heuristic: stdlib after third-party is wrong
@@ -1375,8 +1565,14 @@ def check_consistency(root: Path) -> CheckResult:
                                 severity="low",
                                 file=rel(f, root),
                                 line=lineno,
-                                issue="Import ordering: stdlib import appears after third-party imports",
-                                fix="Use ruff with `I` rules enabled to auto-sort: stdlib → third-party → local",
+                                issue=(
+                                    "Import ordering: stdlib import appears after"
+                                    " third-party imports"
+                                ),
+                                fix=(
+                                    "Use ruff with `I` rules enabled to auto-sort:"
+                                    " stdlib → third-party → local"
+                                ),
                             )
                         )
                         break
@@ -1443,7 +1639,8 @@ def print_report(results: list[CheckResult]) -> None:
             continue
 
         print(
-            f"\n  {'—' * 3} {result.name.upper()} {'—' * (WIDTH - len(result.name) - 7)}"
+            f"\n  {'—' * 3} {result.name.upper()}"
+            f" {'—' * (WIDTH - len(result.name) - 7)}"
         )
         sorted_findings = sorted(
             result.findings, key=lambda f: SEVERITY_ORDER[f.severity]
@@ -1494,7 +1691,9 @@ def print_json(results: list[CheckResult]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Codebase health check for FastAPI / Pydantic v2 / PostgreSQL projects"
+        description=(
+            "Codebase health check for FastAPI / Pydantic v2 / PostgreSQL projects"
+        )
     )
     parser.add_argument(
         "--path", default=".", help="Project root directory (default: current dir)"
