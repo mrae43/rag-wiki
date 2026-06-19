@@ -356,62 +356,62 @@ async def assemble_context(
                 f"Failed to fetch chunks for {len(all_entity_ids)} entities"
             ) from exc
 
-            seed_pairs: list[tuple[Chunk, uuid.UUID]] = []
-            hop_pairs: list[tuple[Chunk, uuid.UUID]] = []
-            for cid, ent_ids in chunk_to_entities.items():
-                chunk = chunks_by_id.get(cid)
-                if chunk is None:
-                    continue
-                linked_seeds = [eid for eid in ent_ids if eid in seed_ids_set]
-                if linked_seeds:
-                    seed_pairs.append((chunk, linked_seeds[0]))
-                else:
-                    hop_pairs.append((chunk, ent_ids[0]))
+        seed_pairs: list[tuple[Chunk, uuid.UUID]] = []
+        hop_pairs: list[tuple[Chunk, uuid.UUID]] = []
+        for cid, ent_ids in chunk_to_entities.items():
+            chunk = chunks_by_id.get(cid)
+            if chunk is None:
+                continue
+            linked_seeds = [eid for eid in ent_ids if eid in seed_ids_set]
+            if linked_seeds:
+                seed_pairs.append((chunk, linked_seeds[0]))
+            else:
+                hop_pairs.append((chunk, ent_ids[0]))
 
-            chunks_fetched = len(seed_pairs) + len(hop_pairs)
+        chunks_fetched = len(seed_pairs) + len(hop_pairs)
 
-            # Score with the pre-computed query embedding.
-            seed_scored = await _score_chunk_pairs(
-                seed_pairs, query_embedding, embed_provider, settings.embedding_model
+        # Score with the pre-computed query embedding.
+        seed_scored = await _score_chunk_pairs(
+            seed_pairs, query_embedding, embed_provider, settings.embedding_model
+        )
+        hop_scored = await _score_chunk_pairs(
+            hop_pairs, query_embedding, embed_provider, settings.embedding_model
+        )
+
+        # Deduplicate globally across seed + hop.
+        all_for_dedup = [(sim, chunk) for sim, chunk, _ in seed_scored + hop_scored]
+        deduped = deduplicate_chunks(
+            all_for_dedup,
+            threshold=settings.retrieval_dedup_threshold,
+        )
+        deduped_ids = {c.id for _, c in deduped}
+        chunks_after_dedup = len(deduped_ids)
+
+        seed_scored = [
+            (sim, chunk, eid)
+            for sim, chunk, eid in seed_scored
+            if chunk.id in deduped_ids
+        ]
+        hop_scored = [
+            (sim, chunk, eid)
+            for sim, chunk, eid in hop_scored
+            if chunk.id in deduped_ids
+        ]
+
+        # Build ScoredChunk objects.
+        seed_chunks_raw = [
+            _build_scored_chunk(sim, chunk, eid, hop_distance=0)
+            for sim, chunk, eid in seed_scored
+        ]
+        hop_chunks_raw = [
+            _build_scored_chunk(
+                sim, chunk, eid, hop_distance=traversal.hop_map.get(eid, 1)
             )
-            hop_scored = await _score_chunk_pairs(
-                hop_pairs, query_embedding, embed_provider, settings.embedding_model
-            )
+            for sim, chunk, eid in hop_scored
+        ]
 
-            # Deduplicate globally across seed + hop.
-            all_for_dedup = [(sim, chunk) for sim, chunk, _ in seed_scored + hop_scored]
-            deduped = deduplicate_chunks(
-                all_for_dedup,
-                threshold=settings.retrieval_dedup_threshold,
-            )
-            deduped_ids = {c.id for _, c in deduped}
-            chunks_after_dedup = len(deduped_ids)
-
-            seed_scored = [
-                (sim, chunk, eid)
-                for sim, chunk, eid in seed_scored
-                if chunk.id in deduped_ids
-            ]
-            hop_scored = [
-                (sim, chunk, eid)
-                for sim, chunk, eid in hop_scored
-                if chunk.id in deduped_ids
-            ]
-
-            # Build ScoredChunk objects.
-            seed_chunks_raw = [
-                _build_scored_chunk(sim, chunk, eid, hop_distance=0)
-                for sim, chunk, eid in seed_scored
-            ]
-            hop_chunks_raw = [
-                _build_scored_chunk(
-                    sim, chunk, eid, hop_distance=traversal.hop_map.get(eid, 1)
-                )
-                for sim, chunk, eid in hop_scored
-            ]
-
-            seed_chunks_list = _truncate_chunks(seed_chunks_raw, seed_chunk_budget)
-            hop_chunks_list = _truncate_chunks(hop_chunks_raw, hop_chunk_budget)
+        seed_chunks_list = _truncate_chunks(seed_chunks_raw, seed_chunk_budget)
+        hop_chunks_list = _truncate_chunks(hop_chunks_raw, hop_chunk_budget)
 
     # --- Token counts ---
     seed_chunk_tokens = sum(estimate_tokens(c.text) for c in seed_chunks_list)
