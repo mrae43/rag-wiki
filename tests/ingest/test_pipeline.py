@@ -8,9 +8,9 @@ temporary files. Covers happy path, total failure, and partial failure.
 
 from __future__ import annotations
 
-from collections.abc import Generator
 import os
 import tempfile
+from collections.abc import Generator
 
 import pytest
 from sqlalchemy import select, text
