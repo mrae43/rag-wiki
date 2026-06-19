@@ -188,7 +188,7 @@ async def test_chunks_composite_index_exists(engine: AsyncEngine) -> None:
 
 
 async def test_relations_composite_index_exists(engine: AsyncEngine) -> None:
-    """Verify the composite index on ``relations (source_entity_id, target_entity_id, relation_type)`` exists."""
+    """Verify ``relations`` composite index exists."""
     async with engine.connect() as conn:
         assert await _index_exists(conn, "idx_relations_source_target_type")
 
@@ -283,7 +283,7 @@ async def test_create_source_and_chunk(db: AsyncSession) -> None:
 
 
 async def test_create_entity_and_relation(db: AsyncSession) -> None:
-    """Create two Entities and a Relation between them via ORM and verify persistence."""
+    """Create two Entities and a Relation between them via ORM."""
     source = Source(
         file_path="/tmp/test.pdf",
         file_name="test.pdf",
