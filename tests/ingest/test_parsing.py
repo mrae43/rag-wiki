@@ -141,6 +141,7 @@ def invalid_pdf() -> Generator[str, None, None]:
 
 
 class TestCountTokens:
+    """Tests for the count_tokens helper."""
     def test_empty_string(self) -> None:
         """Verify count_tokens returns 1 for an empty string."""
         assert count_tokens("") == 1
@@ -165,6 +166,7 @@ class TestCountTokens:
 
 
 class TestSplitBySections:
+    """Tests for the split_by_sections chunking function."""
     def test_empty_sections(self) -> None:
         """Verify split_by_sections returns an empty list for no sections."""
         assert split_by_sections([]) == []
@@ -212,6 +214,7 @@ class TestSplitBySections:
 
 
 class TestSimpleParser:
+    """Tests for parse_simple (TXT / MD parser)."""
     def test_txt_section_split(self, txt_file: str) -> None:
         """Verify parse_simple splits .txt into sections, preserving all names."""
         chunks = parse_simple(txt_file)
@@ -257,6 +260,7 @@ class TestSimpleParser:
 
 
 class TestPdfParser:
+    """Tests for parse_pdf (PDF parser)."""
     def test_text_extraction(self, pdf_with_text: str) -> None:
         """Verify parse_pdf extracts text content from PDF pages."""
         chunks = parse_pdf(pdf_with_text)
@@ -306,6 +310,7 @@ class TestPdfParser:
 
 
 class TestParseDocument:
+    """Tests for parse_document (parser routing/dispatch)."""
     def test_routes_pdf_by_mime(self, pdf_with_text: str) -> None:
         """Verify parse_document routes .pdf files to the PDF parser by MIME type."""
         chunks = parse_document(pdf_with_text)
@@ -359,6 +364,7 @@ class TestParseDocument:
 
 
 class TestErrorHandling:
+    """Tests for error handling in parse_document and parse_pdf."""
     def test_unreadable_file(self) -> None:
         """Verify parse_document raises ParseError for an unreadable file path."""
         from rag_wiki.exceptions import ParseError

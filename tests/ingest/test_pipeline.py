@@ -8,9 +8,9 @@ temporary files. Covers happy path, total failure, and partial failure.
 
 from __future__ import annotations
 
-from collections.abc import Generator
 import os
 import tempfile
+from collections.abc import Generator
 
 import pytest
 from sqlalchemy import select, text
@@ -54,9 +54,11 @@ class FakeChatProvider:
     """
 
     def __init__(self, response_map: dict[str, str] | None = None) -> None:
+        """Initialise with optional response_map mapping tool names to canned JSON."""
         self.response_map = response_map or {}
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Return a canned CompletionResponse matching response_map, or a default."""
         if request.tools and self.response_map:
             for tool in request.tools:
                 if tool.name in self.response_map:
@@ -82,6 +84,7 @@ class FakeChatProvider:
     async def caption_image(
         self, image_bytes: bytes, image_mime_type: str, model: str
     ) -> str:
+        """Return a deterministic fake caption string from the image MIME type."""
         return f"fake-caption-{image_mime_type}"
 
 
@@ -89,6 +92,7 @@ class FakeEmbeddingProvider:
     """Deterministic embedding provider matching the DB vector column."""
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Return zero-filled embedding vectors of configured dims for each text."""
         dims = get_settings().embedding_dimensions
         return [[0.0] * dims for _ in texts]
 
@@ -97,9 +101,11 @@ class CountingFailEmbedProvider:
     """Fails on the first ``embed`` call, then succeeds."""
 
     def __init__(self) -> None:
+        """Initialise call_count at zero so the first embed call raises."""
         self.call_count = 0
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Raise on first call, then return zero-vector embeddings on later calls."""
         self.call_count += 1
         if self.call_count == 1:
             raise LLMProviderError("first embed call fails")

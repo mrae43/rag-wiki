@@ -33,9 +33,11 @@ class FakeEmbeddingProvider(EmbeddingProvider):
     """Test double returning deterministic one-hot embeddings."""
 
     def __init__(self, dim: int = 3072) -> None:
+        """Store embedding dimension for one-hot vector generation."""
         self.dim = dim
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Return one-hot embeddings for each input text."""
         return [
             [1.0 if j == i % self.dim else 0.0 for j in range(self.dim)]
             for i in range(len(texts))
@@ -46,11 +48,13 @@ class DummyChatProvider:
     """Minimal stand-in satisfying the ChatProvider protocol."""
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
+        """Stand-in that always raises; override in test if needed."""
         raise NotImplementedError
 
     async def caption_image(
         self, image_bytes: bytes, image_mime_type: str, model: str
     ) -> str:
+        """Return empty string — no image captioning in tests."""
         return ""
 
 
