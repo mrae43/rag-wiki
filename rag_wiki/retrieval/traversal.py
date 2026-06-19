@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from rag_wiki.db.models.graph import Entity, Relation
+from rag_wiki.exceptions import DatabaseError
 from rag_wiki.settings import get_settings
 
 logger = structlog.get_logger(__name__)
@@ -81,13 +82,24 @@ async def traverse(
         return TraversalResult(entities=[], relations=[], hop_map={})
 
     # Run the raw CTE.
-    rows = await db.execute(
-        sa.text(_TRAVERSAL_SQL),
-        {
-            "seed_ids": seed_entity_ids,
-            "max_hops": settings.retrieval_max_hops,
-        },
-    )
+    try:
+        rows = await db.execute(
+            sa.text(_TRAVERSAL_SQL),
+            {
+                "seed_ids": seed_entity_ids,
+                "max_hops": settings.retrieval_max_hops,
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "Failed to run graph traversal CTE",
+            seed_ids=[str(eid) for eid in seed_entity_ids],
+            max_hops=settings.retrieval_max_hops,
+            error=str(exc),
+        )
+        raise DatabaseError(
+            f"Failed to run graph traversal from {len(seed_entity_ids)} seeds"
+        ) from exc
 
     all_hops: dict[uuid.UUID, int] = {}
     for row in rows:
@@ -114,15 +126,29 @@ async def traverse(
         limited_ids.extend(hop_buckets[hop][:max_per_hop])
 
     # Load full entity objects with relations.
-    result = await db.execute(
-        sa.select(Entity)
-        .options(
-            joinedload(Entity.outgoing_relations).joinedload(Relation.target_entity),
-            joinedload(Entity.incoming_relations).joinedload(Relation.source_entity),
+    try:
+        result = await db.execute(
+            sa.select(Entity)
+            .options(
+                joinedload(Entity.outgoing_relations).joinedload(
+                    Relation.target_entity
+                ),
+                joinedload(Entity.incoming_relations).joinedload(
+                    Relation.source_entity
+                ),
+            )
+            .where(Entity.id.in_(limited_ids))
         )
-        .where(Entity.id.in_(limited_ids))
-    )
-    all_entities = list(result.unique().scalars().all())
+        all_entities = list(result.unique().scalars().all())
+    except Exception as exc:
+        logger.error(
+            "Failed to load traversed entities",
+            limited_ids=[str(eid) for eid in limited_ids],
+            error=str(exc),
+        )
+        raise DatabaseError(
+            f"Failed to load {len(limited_ids)} traversed entities"
+        ) from exc
 
     # Rank each hop by degree descending. The per-hop ceiling was already
     # applied at the ID level before ORM loading; this step keeps the

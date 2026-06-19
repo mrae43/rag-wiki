@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from rag_wiki.db.models.graph import Entity
+from rag_wiki.exceptions import DatabaseError
 from rag_wiki.providers.base import EmbeddingProvider
 from rag_wiki.retrieval.schemas import SeedResult, StructuralAnchor
 from rag_wiki.settings import get_settings
@@ -103,15 +104,25 @@ async def find_seeds(
     settings = get_settings()
 
     if seed_entity_ids:
-        result = await db.execute(
-            sa.select(Entity)
-            .options(
-                joinedload(Entity.outgoing_relations),
-                joinedload(Entity.incoming_relations),
+        try:
+            result = await db.execute(
+                sa.select(Entity)
+                .options(
+                    joinedload(Entity.outgoing_relations),
+                    joinedload(Entity.incoming_relations),
+                )
+                .where(Entity.id.in_(seed_entity_ids))
             )
-            .where(Entity.id.in_(seed_entity_ids))
-        )
-        entities = list(result.unique().scalars().all())
+            entities = list(result.unique().scalars().all())
+        except Exception as exc:
+            logger.error(
+                "Failed to fetch seed entities by IDs",
+                seed_ids=[str(eid) for eid in seed_entity_ids],
+                error=str(exc),
+            )
+            raise DatabaseError(
+                f"Failed to fetch seed entities by IDs: {seed_entity_ids}"
+            ) from exc
         seeds: list[SeedResult] = []
         for ent in entities:
             anchor = _make_anchor(ent, hop_distance=0)
@@ -127,17 +138,24 @@ async def find_seeds(
 
     # Vector search on entity embeddings (exclude entities without embeddings).
     k = settings.retrieval_seed_count
-    result = await db.execute(
-        sa.select(Entity)
-        .options(
-            joinedload(Entity.outgoing_relations),
-            joinedload(Entity.incoming_relations),
+    try:
+        result = await db.execute(
+            sa.select(Entity)
+            .options(
+                joinedload(Entity.outgoing_relations),
+                joinedload(Entity.incoming_relations),
+            )
+            .where(Entity.embedding.is_not(None))
+            .order_by(Entity.embedding.cosine_distance(query_embedding))
+            .limit(k)
         )
-        .where(Entity.embedding.is_not(None))
-        .order_by(Entity.embedding.cosine_distance(query_embedding))
-        .limit(k)
-    )
-    entities = list(result.unique().scalars().all())
+        entities = list(result.unique().scalars().all())
+    except Exception as exc:
+        logger.error(
+            "Failed to find seeds by vector search",
+            error=str(exc),
+        )
+        raise DatabaseError("Failed to find seeds by vector search") from exc
 
     seeds = []
     for ent in entities:

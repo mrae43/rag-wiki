@@ -18,6 +18,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.db.models.jobs import Job
+from rag_wiki.exceptions import DatabaseError
 
 logger = structlog.get_logger(__name__)
 
@@ -67,7 +68,15 @@ async def enqueue(
         target_entity_id=target_entity_id,
     )
     db.add(job)
-    await db.flush()
+    try:
+        await db.flush()
+    except Exception as exc:
+        logger.error(
+            "Failed to enqueue job",
+            job_type=job_type,
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to enqueue job of type {job_type}") from exc
     logger.info("job enqueued", job_id=str(job.id), job_type=job_type)
     return job
 
@@ -92,17 +101,29 @@ async def claim_next(
     """
     # job_types filtering is reserved for future multi-type worker dispatch.
     _ = job_types
-    result = await db.execute(
-        text(_CLAIM_JOB_SQL),
-        {"worker_id": worker_id or "unknown"},
-    )
-    row = result.fetchone()
-    if row is None:
-        return None
-    job_id = row[0]
-    stmt = select(Job).where(Job.id == job_id).execution_options(populate_existing=True)
-    job_result = await db.execute(stmt)
-    job = job_result.scalar_one_or_none()
+    try:
+        result = await db.execute(
+            text(_CLAIM_JOB_SQL),
+            {"worker_id": worker_id or "unknown"},
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        job_id = row[0]
+        stmt = (
+            select(Job)
+            .where(Job.id == job_id)
+            .execution_options(populate_existing=True)
+        )
+        job_result = await db.execute(stmt)
+        job = job_result.scalar_one_or_none()
+    except Exception as exc:
+        logger.error(
+            "Failed to claim next job",
+            worker_id=worker_id,
+            error=str(exc),
+        )
+        raise DatabaseError("Failed to claim next job") from exc
     if job is not None:
         logger.info(
             "job claimed",

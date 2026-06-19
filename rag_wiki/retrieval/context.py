@@ -19,6 +19,7 @@ from sqlalchemy.orm import joinedload
 
 from rag_wiki.db.models.source import Chunk, ChunkEntity
 from rag_wiki.db.models.wiki import WikiPage
+from rag_wiki.exceptions import DatabaseError
 from rag_wiki.providers.base import EmbeddingProvider
 from rag_wiki.retrieval.schemas import (
     RetrievalResult,
@@ -120,10 +121,20 @@ async def _fetch_wiki_page(
     budget: int,
 ) -> WikiPageSnapshot | None:
     """Fetch and section-priority-truncate a wiki page."""
-    result = await db.execute(
-        sa.select(WikiPage).where(WikiPage.entity_id == entity_id)
-    )
-    page = result.scalar_one_or_none()
+    try:
+        result = await db.execute(
+            sa.select(WikiPage).where(WikiPage.entity_id == entity_id)
+        )
+        page = result.scalar_one_or_none()
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch wiki page for context assembly",
+            entity_id=str(entity_id),
+            error=str(exc),
+        )
+        raise DatabaseError(
+            f"Failed to fetch wiki page for entity {entity_id}"
+        ) from exc
     if page is None:
         return None
 
@@ -317,23 +328,33 @@ async def assemble_context(
     chunks_after_dedup = 0
 
     if all_entity_ids and elastic_budget > 0:
-        ce_result = await db.execute(
-            sa.select(ChunkEntity.chunk_id, ChunkEntity.entity_id).where(
-                ChunkEntity.entity_id.in_(all_entity_ids)
+        try:
+            ce_result = await db.execute(
+                sa.select(ChunkEntity.chunk_id, ChunkEntity.entity_id).where(
+                    ChunkEntity.entity_id.in_(all_entity_ids)
+                )
             )
-        )
-        chunk_to_entities: dict[uuid.UUID, list[uuid.UUID]] = {}
-        for chunk_id, entity_id in ce_result.all():
-            chunk_to_entities.setdefault(chunk_id, []).append(entity_id)
+            chunk_to_entities: dict[uuid.UUID, list[uuid.UUID]] = {}
+            for chunk_id, entity_id in ce_result.all():
+                chunk_to_entities.setdefault(chunk_id, []).append(entity_id)
 
-        chunk_ids = list(chunk_to_entities.keys())
-        if chunk_ids:
-            chunk_result = await db.execute(
-                sa.select(Chunk)
-                .options(joinedload(Chunk.source))
-                .where(Chunk.id.in_(chunk_ids))
+            chunk_ids = list(chunk_to_entities.keys())
+            if chunk_ids:
+                chunk_result = await db.execute(
+                    sa.select(Chunk)
+                    .options(joinedload(Chunk.source))
+                    .where(Chunk.id.in_(chunk_ids))
+                )
+                chunks_by_id = {c.id: c for c in chunk_result.unique().scalars().all()}
+        except Exception as exc:
+            logger.error(
+                "Failed to fetch chunks for context assembly",
+                entity_count=len(all_entity_ids),
+                error=str(exc),
             )
-            chunks_by_id = {c.id: c for c in chunk_result.unique().scalars().all()}
+            raise DatabaseError(
+                f"Failed to fetch chunks for {len(all_entity_ids)} entities"
+            ) from exc
 
             seed_pairs: list[tuple[Chunk, uuid.UUID]] = []
             hop_pairs: list[tuple[Chunk, uuid.UUID]] = []
