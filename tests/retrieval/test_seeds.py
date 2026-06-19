@@ -35,6 +35,7 @@ async def _make_entity(
 
 
 def test_seed_quality_thresholds() -> None:
+    """Verify _seed_quality returns high/low/poor based on cosine-distance threshold."""
     assert _seed_quality(0.15) == "high"
     assert _seed_quality(0.2) == "low"
     assert _seed_quality(0.3) == "low"
@@ -44,6 +45,7 @@ def test_seed_quality_thresholds() -> None:
 
 @pytest.mark.asyncio
 async def test_find_seeds_by_vector_search(db: AsyncSession) -> None:
+    """Verify find_seeds ranks entities by embedding distance and assigns quality."""
     dims = get_settings().embedding_dimensions
     # close: parallel to query, distance 0.0
     close_emb = [1.0] + [0.0] * (dims - 1)
@@ -72,6 +74,7 @@ async def test_find_seeds_by_vector_search(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_find_seeds_by_entity_ids_bypasses_search(db: AsyncSession) -> None:
+    """Verify find_seeds bypasses vector search when seed_entity_ids is provided."""
     dims = get_settings().embedding_dimensions
     ent = await _make_entity(db, "Direct", _embedding(dims, 0.5))
 
@@ -89,6 +92,7 @@ async def test_find_seeds_by_entity_ids_bypasses_search(db: AsyncSession) -> Non
 
 @pytest.mark.asyncio
 async def test_find_seeds_empty_results(db: AsyncSession) -> None:
+    """Verify find_seeds returns an empty list when no entities exist."""
     dims = get_settings().embedding_dimensions
     seeds = await find_seeds([0.0] * dims, db)
     assert seeds == []
@@ -96,6 +100,7 @@ async def test_find_seeds_empty_results(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_find_seeds_anchor_metadata(db: AsyncSession) -> None:
+    """Verify find_seeds populates anchor metadata (name, hop_distance, centrality)."""
     dims = get_settings().embedding_dimensions
     await _make_entity(db, "AnchorTest", _embedding(dims, 1.0))
 

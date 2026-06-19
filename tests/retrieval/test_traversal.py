@@ -65,6 +65,7 @@ async def _make_relation(
 
 @pytest.mark.asyncio
 async def test_traversal_bidirectional_two_hops(db: AsyncSession) -> None:
+    """Verify traverse walks a two-relation chain bidirectionally with correct hops."""
     # seed -> hop1 -> hop2
     seed = await _make_entity(db, "Seed")
     hop1 = await _make_entity(db, "Hop1")
@@ -84,6 +85,7 @@ async def test_traversal_bidirectional_two_hops(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_traversal_no_relations(db: AsyncSession) -> None:
+    """Verify traverse returns empty result for a seed with no relations."""
     seed = await _make_entity(db, "Lonely")
     result = await traverse([seed.id], db)
     assert result.entities == []
@@ -93,6 +95,7 @@ async def test_traversal_no_relations(db: AsyncSession) -> None:
 
 @pytest.mark.asyncio
 async def test_traversal_empty_seeds(db: AsyncSession) -> None:
+    """Verify traverse returns empty result when given an empty list of seed IDs."""
     result = await traverse([], db)
     assert result.entities == []
     assert result.relations == []

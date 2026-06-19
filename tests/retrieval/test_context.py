@@ -185,6 +185,7 @@ async def test_context_no_seeds_empty_result(
     db: AsyncSession,
     mock_embedding_provider: EmbeddingProvider,
 ) -> None:
+    """Verify assemble_context returns an empty result when no seeds are provided."""
     dims = get_settings().embedding_dimensions
     result = await assemble_context(
         query="test",

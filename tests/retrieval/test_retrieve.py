@@ -72,6 +72,7 @@ async def test_retrieve_end_to_end(
     db: AsyncSession,
     mock_embedding_provider: EmbeddingProvider,
 ) -> None:
+    """Verify retrieval pipeline returns seeds, subgraph, wiki page, token info."""
     dims = get_settings().embedding_dimensions
     src = await _make_source(db)
 
@@ -128,6 +129,7 @@ async def test_retrieve_with_seed_entity_ids(
     db: AsyncSession,
     mock_embedding_provider: EmbeddingProvider,
 ) -> None:
+    """Verify retrieve respects seed_entity_ids and returns the entity as a seed."""
     dims = get_settings().embedding_dimensions
     src = await _make_source(db)
     seed = await _make_entity(db, "DirectSeed", _embedding(dims, 1.0))
@@ -153,6 +155,7 @@ async def test_retrieve_no_matches_returns_empty_result(
     db: AsyncSession,
     mock_embedding_provider: EmbeddingProvider,
 ) -> None:
+    """Verify retrieve returns an empty result when no entities match the query."""
     result = await retrieve(
         query="nothing",
         db=db,
