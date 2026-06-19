@@ -19,6 +19,7 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from rag_wiki.db.models.graph import Entity, Relation
 from rag_wiki.db.models.source import Chunk, ChunkEntity, Source
+from rag_wiki.exceptions import DatabaseError
 from rag_wiki.providers.base import ChatProvider, EmbeddingProvider
 from rag_wiki.retrieval.scoring import (
     deduplicate_chunks,
@@ -258,10 +259,18 @@ async def build_source_summary_context(
         template.
     """
     # All chunks for this source.
-    chunk_result = await db.execute(
-        sa.select(Chunk).where(Chunk.source_id == source.id)
-    )
-    chunks = list(chunk_result.scalars().all())
+    try:
+        chunk_result = await db.execute(
+            sa.select(Chunk).where(Chunk.source_id == source.id)
+        )
+        chunks = list(chunk_result.scalars().all())
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch chunks for source summary",
+            source_id=str(source.id),
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to fetch chunks for source {source.id}") from exc
 
     chunk_contexts: list[dict[str, Any]] = []
     for chunk in chunks:
@@ -278,31 +287,49 @@ async def build_source_summary_context(
         )
 
     # Entities touched by this source.
-    entity_result = await db.execute(
-        sa.select(Entity)
-        .join(ChunkEntity, Entity.id == ChunkEntity.entity_id)
-        .join(Chunk, Chunk.id == ChunkEntity.chunk_id)
-        .where(Chunk.source_id == source.id)
-        .distinct()
-    )
-    touched_entities = [
-        {
-            "slug": generate_slug(ent.name, ent.id),
-            "name": ent.name,
-        }
-        for ent in entity_result.scalars().all()
-    ]
+    try:
+        entity_result = await db.execute(
+            sa.select(Entity)
+            .join(ChunkEntity, Entity.id == ChunkEntity.entity_id)
+            .join(Chunk, Chunk.id == ChunkEntity.chunk_id)
+            .where(Chunk.source_id == source.id)
+            .distinct()
+        )
+        touched_entities = [
+            {
+                "slug": generate_slug(ent.name, ent.id),
+                "name": ent.name,
+            }
+            for ent in entity_result.scalars().all()
+        ]
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch entities for source summary",
+            source_id=str(source.id),
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to fetch entities for source {source.id}") from exc
 
     # Relations introduced by this source.
-    relation_result = await db.execute(
-        sa.select(Relation)
-        .join(Chunk, Relation.chunk_id == Chunk.id)
-        .options(
-            joinedload(Relation.source_entity),
-            joinedload(Relation.target_entity),
+    try:
+        relation_result = await db.execute(
+            sa.select(Relation)
+            .join(Chunk, Relation.chunk_id == Chunk.id)
+            .options(
+                joinedload(Relation.source_entity),
+                joinedload(Relation.target_entity),
+            )
+            .where(Chunk.source_id == source.id)
         )
-        .where(Chunk.source_id == source.id)
-    )
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch relations for source summary",
+            source_id=str(source.id),
+            error=str(exc),
+        )
+        raise DatabaseError(
+            f"Failed to fetch relations for source {source.id}"
+        ) from exc
     source_relations: list[dict[str, str]] = []
     for rel in relation_result.scalars().all():
         if rel.source_entity is None or rel.target_entity is None:
