@@ -184,3 +184,5 @@ build/
 
 .opencode/
 .server.json
+
+.healthcheck.py

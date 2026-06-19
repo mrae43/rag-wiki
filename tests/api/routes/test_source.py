@@ -5,6 +5,8 @@ Tests for the source upload and lifecycle endpoints.
 
 from __future__ import annotations
 
+import io
+import uuid
 from collections.abc import AsyncGenerator
 from pathlib import Path
 

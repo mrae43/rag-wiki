@@ -180,7 +180,7 @@ async def test_openai_provider_complete_passes_temperature_and_max_tokens() -> N
 
 
 async def test_openai_provider_complete_api_error_raises_llm_provider_error() -> None:
-    """Test complete() raises LLMProviderError when the OpenAI SDK returns an APIError."""
+    """Test complete() raises LLMProviderError on OpenAI SDK APIError."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_client.chat.completions.create = AsyncMock(
@@ -202,7 +202,7 @@ async def test_openai_provider_complete_api_error_raises_llm_provider_error() ->
 
 
 async def test_openai_provider_caption_image() -> None:
-    """Test caption_image() sends base64-encoded image bytes and returns the caption text."""
+    """Test caption_image() sends base64 image bytes and returns caption text."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_response = MagicMock()
@@ -235,7 +235,7 @@ async def test_openai_provider_caption_image() -> None:
 
 
 async def test_openai_provider_caption_image_api_error_raises() -> None:
-    """Test caption_image() raises LLMProviderError when the OpenAI SDK returns an APIError."""
+    """Test caption_image() raises LLMProviderError on OpenAI SDK APIError."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_client.chat.completions.create = AsyncMock(
@@ -315,7 +315,7 @@ async def test_openai_provider_embed_api_error_raises() -> None:
 
 
 async def test_openai_provider_complete_unexpected_error_raises() -> None:
-    """Test complete() raises LLMProviderError even for non-API (unexpected) exceptions."""
+    """Test complete() raises LLMProviderError for non-API exceptions."""
     settings = _make_settings()
     mock_client = MagicMock(spec=openai.AsyncClient)
     mock_client.chat.completions.create = AsyncMock(side_effect=RuntimeError("boom"))
