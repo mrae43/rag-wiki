@@ -184,6 +184,12 @@ pytest tests/graph/   # specific module
 Run in order: `ruff check` → `ruff format` → `mypy` → `pytest`.
 All four must pass before considering a task done.
 
+**Before running `pytest`,** ensure all dependencies including dev tools are installed:
+```
+uv sync --extra dev
+```
+Do not use `pip install` for a missing test dependency — that means `--extra dev` was omitted from `uv sync`. Repeated ad-hoc `pip install` calls drift from the lockfile.
+
 ---
 
 ## Migrations

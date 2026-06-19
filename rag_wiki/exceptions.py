@@ -38,6 +38,10 @@ class ParseError(IngestError):
     """Raised when a document cannot be parsed by any available parser."""
 
 
+class DatabaseError(RagWikiError):
+    """Raised when a database operation fails in domain code."""
+
+
 class RetrievalError(RagWikiError):
     """Raised when the retrieval pipeline cannot assemble context.
 

@@ -12,6 +12,7 @@ import datetime
 import uuid
 from typing import Annotated, Any
 
+import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
@@ -21,7 +22,9 @@ from rag_wiki.api.dependencies import get_db
 from rag_wiki.api.exceptions import NotFoundError
 from rag_wiki.api.schemas import PaginatedListEnvelope
 from rag_wiki.db.models import Job
+from rag_wiki.exceptions import DatabaseError
 
+logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 DEFAULT_LIMIT = 20
@@ -47,8 +50,16 @@ class JobResponse(BaseModel):
 
 async def _get_job_or_404(db: AsyncSession, job_id: uuid.UUID) -> Job:
     """Fetch a job by id, raising a 404 Problem Detail if missing."""
-    result = await db.execute(select(Job).where(Job.id == job_id))
-    job = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(Job).where(Job.id == job_id))
+        job = result.scalar_one_or_none()
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch job",
+            job_id=str(job_id),
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to fetch job {job_id}") from exc
     if job is None:
         raise NotFoundError(f"Job not found: {job_id}")
     return job
@@ -81,11 +92,22 @@ async def list_jobs(
 
     stmt = stmt.order_by(Job.created_at.desc()).offset(offset).limit(limit)
 
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar_one()
+    try:
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar_one()
 
-    result = await db.execute(stmt)
-    jobs = result.scalars().all()
+        result = await db.execute(stmt)
+        jobs = result.scalars().all()
+    except Exception as exc:
+        logger.error(
+            "Failed to list jobs",
+            offset=offset,
+            limit=limit,
+            status=status,
+            job_type=job_type,
+            error=str(exc),
+        )
+        raise DatabaseError("Failed to list jobs") from exc
     items = [
         JobResponse(
             id=j.id,

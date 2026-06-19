@@ -12,6 +12,7 @@ import datetime
 import uuid
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
@@ -22,7 +23,9 @@ from rag_wiki.api.dependencies import get_db
 from rag_wiki.api.exceptions import BadRequestError, NotFoundError
 from rag_wiki.api.schemas import PaginatedListEnvelope
 from rag_wiki.db.models import Entity, Relation, WikiPage
+from rag_wiki.exceptions import DatabaseError
 
+logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/entities", tags=["entities"])
 
 DEFAULT_LIMIT = 20
@@ -76,8 +79,16 @@ class EntityWikiPageResponse(BaseModel):
 
 async def _get_entity_or_404(db: AsyncSession, entity_id: uuid.UUID) -> Entity:
     """Fetch an entity by id, raising a 404 Problem Detail if missing."""
-    result = await db.execute(select(Entity).where(Entity.id == entity_id))
-    entity = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(Entity).where(Entity.id == entity_id))
+        entity = result.scalar_one_or_none()
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch entity",
+            entity_id=str(entity_id),
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to fetch entity {entity_id}") from exc
     if entity is None:
         raise NotFoundError(f"Entity not found: {entity_id}")
     return entity
@@ -115,11 +126,21 @@ async def list_entities(
 
     stmt = stmt.order_by(Entity.created_at.desc()).offset(offset).limit(limit)
 
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar_one()
+    try:
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar_one()
 
-    result = await db.execute(stmt)
-    entities = result.scalars().all()
+        result = await db.execute(stmt)
+        entities = result.scalars().all()
+    except Exception as exc:
+        logger.error(
+            "Failed to list entities",
+            offset=offset,
+            limit=limit,
+            status=status,
+            error=str(exc),
+        )
+        raise DatabaseError("Failed to list entities") from exc
     items = [
         EntityResponse(
             id=e.id,
@@ -202,11 +223,22 @@ async def list_entity_relations(
 
     stmt = stmt.order_by(Relation.created_at.desc()).offset(offset).limit(limit)
 
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar_one()
+    try:
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar_one()
 
-    result = await db.execute(stmt)
-    relations = result.unique().scalars().all()
+        result = await db.execute(stmt)
+        relations = result.unique().scalars().all()
+    except Exception as exc:
+        logger.error(
+            "Failed to list entity relations",
+            entity_id=str(entity_id),
+            direction=direction,
+            offset=offset,
+            limit=limit,
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to list relations for entity {entity_id}") from exc
     items = [
         EntityRelationResponse(
             id=r.id,
@@ -237,8 +269,20 @@ async def get_entity_wiki_page(
     """Return the wiki page whose primary entity id matches the entity."""
     await _get_entity_or_404(db, entity_id)
 
-    result = await db.execute(select(WikiPage).where(WikiPage.entity_id == entity_id))
-    page = result.scalar_one_or_none()
+    try:
+        result = await db.execute(
+            select(WikiPage).where(WikiPage.entity_id == entity_id)
+        )
+        page = result.scalar_one_or_none()
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch wiki page for entity",
+            entity_id=str(entity_id),
+            error=str(exc),
+        )
+        raise DatabaseError(
+            f"Failed to fetch wiki page for entity {entity_id}"
+        ) from exc
     if page is None:
         raise NotFoundError(f"Wiki page not found for entity: {entity_id}")
 
