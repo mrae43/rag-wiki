@@ -12,6 +12,7 @@ import datetime
 import uuid
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
@@ -21,7 +22,9 @@ from rag_wiki.api.dependencies import get_db
 from rag_wiki.api.exceptions import NotFoundError
 from rag_wiki.api.schemas import PaginatedListEnvelope
 from rag_wiki.db.models import Entity, WikiPage, WikiPageEntity
+from rag_wiki.exceptions import DatabaseError
 
+logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/wiki-pages", tags=["wiki-pages"])
 
 DEFAULT_LIMIT = 20
@@ -55,8 +58,16 @@ class WikiPageMentionResponse(BaseModel):
 
 async def _get_page_or_404(db: AsyncSession, page_id: uuid.UUID) -> WikiPage:
     """Fetch a wiki page by id, raising a 404 Problem Detail if missing."""
-    result = await db.execute(select(WikiPage).where(WikiPage.id == page_id))
-    page = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(WikiPage).where(WikiPage.id == page_id))
+        page = result.scalar_one_or_none()
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch wiki page",
+            page_id=str(page_id),
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to fetch wiki page {page_id}") from exc
     if page is None:
         raise NotFoundError(f"Wiki page not found: {page_id}")
     return page
@@ -104,11 +115,21 @@ async def list_wiki_pages(
 
     stmt = stmt.order_by(WikiPage.created_at.desc()).offset(offset).limit(limit)
 
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar_one()
+    try:
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar_one()
 
-    result = await db.execute(stmt)
-    pages = result.scalars().all()
+        result = await db.execute(stmt)
+        pages = result.scalars().all()
+    except Exception as exc:
+        logger.error(
+            "Failed to list wiki pages",
+            offset=offset,
+            limit=limit,
+            status=status,
+            error=str(exc),
+        )
+        raise DatabaseError("Failed to list wiki pages") from exc
     items = [_page_to_response(p) for p in pages]
 
     return PaginatedListEnvelope(items=items, total=total, offset=offset, limit=limit)
@@ -141,10 +162,18 @@ async def get_wiki_page_by_slug(
 
     Slug lookup is case-insensitive so human-readable URLs are forgiving.
     """
-    result = await db.execute(
-        select(WikiPage).where(func.lower(WikiPage.slug) == slug.lower())
-    )
-    page = result.scalar_one_or_none()
+    try:
+        result = await db.execute(
+            select(WikiPage).where(func.lower(WikiPage.slug) == slug.lower())
+        )
+        page = result.scalar_one_or_none()
+    except Exception as exc:
+        logger.error(
+            "Failed to fetch wiki page by slug",
+            slug=slug,
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to fetch wiki page by slug {slug}") from exc
     if page is None:
         raise NotFoundError(f"Wiki page not found: {slug}")
     return _page_to_response(page)
@@ -179,11 +208,21 @@ async def list_wiki_page_mentions(
         .where(WikiPageEntity.wiki_page_id == page_id)
     )
 
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar_one()
+    try:
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar_one()
 
-    result = await db.execute(stmt)
-    entities = result.scalars().all()
+        result = await db.execute(stmt)
+        entities = result.scalars().all()
+    except Exception as exc:
+        logger.error(
+            "Failed to list wiki page mentions",
+            page_id=str(page_id),
+            offset=offset,
+            limit=limit,
+            error=str(exc),
+        )
+        raise DatabaseError(f"Failed to list mentions for wiki page {page_id}") from exc
     items = [
         WikiPageMentionResponse(
             id=e.id,

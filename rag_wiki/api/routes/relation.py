@@ -12,6 +12,7 @@ import datetime
 import uuid
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
@@ -21,7 +22,9 @@ from sqlalchemy.orm import joinedload
 from rag_wiki.api.dependencies import get_db
 from rag_wiki.api.schemas import PaginatedListEnvelope
 from rag_wiki.db.models import Relation
+from rag_wiki.exceptions import DatabaseError
 
+logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/relations", tags=["relations"])
 
 DEFAULT_LIMIT = 20
@@ -78,11 +81,23 @@ async def list_relations(
 
     stmt = stmt.order_by(Relation.created_at.desc()).offset(offset).limit(limit)
 
-    total_result = await db.execute(count_stmt)
-    total = total_result.scalar_one()
+    try:
+        total_result = await db.execute(count_stmt)
+        total = total_result.scalar_one()
 
-    result = await db.execute(stmt)
-    relations = result.unique().scalars().all()
+        result = await db.execute(stmt)
+        relations = result.unique().scalars().all()
+    except Exception as exc:
+        logger.error(
+            "Failed to list relations",
+            offset=offset,
+            limit=limit,
+            relation_type=relation_type,
+            source_entity_id=str(source_entity_id) if source_entity_id else None,
+            target_entity_id=str(target_entity_id) if target_entity_id else None,
+            error=str(exc),
+        )
+        raise DatabaseError("Failed to list relations") from exc
     items = [
         RelationResponse(
             id=r.id,
