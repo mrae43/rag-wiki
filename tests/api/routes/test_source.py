@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from pathlib import Path
-import uuid
-import io
 
 from httpx import AsyncClient
 from sqlalchemy import select

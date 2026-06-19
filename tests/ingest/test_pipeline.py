@@ -8,9 +8,9 @@ temporary files. Covers happy path, total failure, and partial failure.
 
 from __future__ import annotations
 
+from collections.abc import Generator
 import os
 import tempfile
-from collections.abc import Generator
 
 import pytest
 from sqlalchemy import select, text
@@ -249,7 +249,10 @@ async def test_ingest_pipeline_all_chunks_fail(
 
     # Embedding provider that always raises.
     class FailEmbedProvider:
+        """Always raises on embed."""
+
         async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+            """Raise LLMProviderError unconditionally."""
             raise LLMProviderError("embedding always fails")
 
     with pytest.raises(IngestError):
@@ -362,7 +365,10 @@ async def test_ingest_no_synthesis_jobs_on_all_fail(
     await db.flush()
 
     class FailEmbedProvider:
+        """Always raises on embed."""
+
         async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+            """Raise LLMProviderError unconditionally."""
             raise LLMProviderError("always fails")
 
     with pytest.raises(IngestError):

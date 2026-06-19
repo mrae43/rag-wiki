@@ -24,6 +24,7 @@ class _FakeEmbedProvider:
         self.dim = dim
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+        """Return a constant vector [1,0,0] for every input text."""
         return [[1.0, 0.0, 0.0] for _ in texts]
 
 
