@@ -19,7 +19,6 @@ from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from rag_wiki.db.base import Base
@@ -47,7 +46,7 @@ async def persistent_db(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, Non
     await session.rollback()
     async with session.begin():
         for table in reversed(Base.metadata.sorted_tables):
-            await session.execute(text(f"TRUNCATE {table.name} CASCADE"))
+            await session.execute(table.delete())
     await session.close()
 
 
