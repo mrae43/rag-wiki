@@ -11,8 +11,10 @@ from __future__ import annotations
 import os
 import tempfile
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +32,11 @@ from rag_wiki.settings import get_settings
 from rag_wiki.wiki.synthesis import (
     JOB_TYPE_SYNTHESIZE_ENTITY,
     JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
+)
+from tests.ingest.conftest import (
+    _DeterministicEmbeddingProvider,
+    drain_synthesis_jobs,
+    make_e2e_chat_provider,
 )
 
 # ---------------------------------------------------------------------------
@@ -385,3 +392,150 @@ async def test_ingest_no_synthesis_jobs_on_all_fail(
         select(Job).where(Job.job_type == JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY)
     )
     assert len(summary_jobs.scalars().all()) == 0
+
+
+# ── E2E Tests ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.e2e
+async def test_e2e_full_pipeline(
+    persistent_db: AsyncSession,
+    e2e_client: AsyncClient,
+    single_chunk_txt: str,
+) -> None:
+    """Full end-to-end pipeline: upload → ingest → synthesize → query."""
+    from rag_wiki.db.models.wiki import WikiPage
+    from rag_wiki.ingest.pipeline import run_ingest_pipeline
+    from rag_wiki.jobs import claim_next, complete_job
+
+    chat = make_e2e_chat_provider()
+    embed = _DeterministicEmbeddingProvider(get_settings().embedding_dimensions)
+
+    # 1. Upload via API.
+    with open(single_chunk_txt, "rb") as f:
+        response = await e2e_client.post(
+            "/api/v1/sources",
+            files={"file": ("test.txt", f, "text/plain")},
+        )
+    assert response.status_code == 201, response.text
+
+    # 2. Claim the ingest job.
+    ingest_job = await claim_next(persistent_db, worker_id="test-worker")
+    assert ingest_job is not None
+    assert ingest_job.job_type == "ingest_document"
+
+    # 3. Run ingestion pipeline.
+    await run_ingest_pipeline(ingest_job, persistent_db, chat, embed)
+
+    # 4. Complete the ingest job.
+    await complete_job(ingest_job, persistent_db)
+    await persistent_db.commit()
+
+    # 5. Drain all synthesis jobs.
+    n = await drain_synthesis_jobs(persistent_db, chat, embed)
+    assert n >= 1  # at least source summary, plus entity pages
+
+    # 6. WikiPage assertions.
+    page_result = await persistent_db.execute(select(WikiPage))
+    pages = page_result.scalars().all()
+    assert len(pages) >= 1
+    for page in pages:
+        assert page.content
+        assert page.synthesized_at is not None
+
+    # 7. Entity assertions.
+    entity_result = await persistent_db.execute(select(Entity))
+    entities = entity_result.scalars().all()
+    entity_names = {e.name for e in entities}
+    assert "Apple Inc." in entity_names
+    assert "Tim Cook" in entity_names
+
+    # 8. Relation assertion.
+    relation_result = await persistent_db.execute(select(Relation))
+    relations = relation_result.scalars().all()
+    assert len(relations) >= 1
+
+    # 9. Query via API.
+    response = await e2e_client.post(
+        "/api/v1/queries",
+        json={"query": "Who is the CEO of Apple Inc.?", "generate_answer": True},
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["answer"] is not None
+    assert len(data["answer"]) > 0
+
+
+@pytest.mark.e2e
+async def test_e2e_entity_resolution_across_documents(
+    persistent_db: AsyncSession,
+    e2e_client: AsyncClient,
+    tmp_path: Path,
+) -> None:
+    """
+    Two documents mentioning the same entity create distinct
+    entities with separate source provenance.
+    """
+    from rag_wiki.db.models.wiki import WikiPage
+    from rag_wiki.ingest.pipeline import run_ingest_pipeline
+    from rag_wiki.jobs import claim_next, complete_job
+
+    chat = make_e2e_chat_provider()
+    embed = _DeterministicEmbeddingProvider(get_settings().embedding_dimensions)
+
+    # Helper to upload a document and run the full pipeline.
+    async def _ingest_doc(content: str, filename: str) -> str:
+        doc_path = tmp_path / filename
+        doc_path.write_text(content, encoding="utf-8")
+        with open(doc_path, "rb") as f:
+            response = await e2e_client.post(
+                "/api/v1/sources",
+                files={"file": (filename, f, "text/plain")},
+            )
+        assert response.status_code == 201, response.text
+        source_id: str = response.json()["id"]
+        job = await claim_next(persistent_db, worker_id="test-worker")
+        assert job is not None
+        await run_ingest_pipeline(job, persistent_db, chat, embed)
+        await complete_job(job, persistent_db)
+        await persistent_db.commit()
+        return source_id
+
+    # 1. First ingest.
+    source_a_id = await _ingest_doc(
+        "Apple Inc. is a technology company. Tim Cook is the CEO.",
+        "doc_a.txt",
+    )
+
+    # Drain synthesis jobs from first ingest so claim_next in second
+    # ingest picks up the correct ingest_document job.
+    n1 = await drain_synthesis_jobs(persistent_db, chat, embed)
+    assert n1 >= 1
+
+    # 2. Second ingest with same entity name.
+    source_b_id = await _ingest_doc(
+        "Apple Inc. was founded by Steve Jobs. Tim Cook is the current CEO.",
+        "doc_b.txt",
+    )
+
+    # 3. Drain remaining synthesis jobs (includes entities from second ingest).
+    n2 = await drain_synthesis_jobs(persistent_db, chat, embed)
+    assert n2 >= 1
+
+    # 4. Both sources are referenced across wiki pages.
+    page_result = await persistent_db.execute(select(WikiPage))
+    pages = page_result.scalars().all()
+    all_sources: set[str] = set()
+    for page in pages:
+        if page.synthesized_from_sources:
+            all_sources.update(page.synthesized_from_sources)
+    assert source_a_id in all_sources
+    assert source_b_id in all_sources
+
+    # 5. Two entities exist (both "new", so separate rows).
+    entity_result = await persistent_db.execute(select(Entity))
+    entities = entity_result.scalars().all()
+    apple_entities = [e for e in entities if e.name == "Apple Inc."]
+    assert len(apple_entities) >= 1
+    tim_cook_entities = [e for e in entities if e.name == "Tim Cook"]
+    assert len(tim_cook_entities) >= 1

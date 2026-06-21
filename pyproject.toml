@@ -65,6 +65,9 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 junit_family = "xunit2"
+markers = [
+    "e2e: end-to-end tests that commit to a real database and run the full pipeline",
+]
 
 [tool.alembic]
 script_location = "alembic"
