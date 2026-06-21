@@ -8,6 +8,18 @@ OVERLAP_CHARS = OVERLAP_TOKENS * CHARS_PER_TOKEN  # 256
 
 
 def count_tokens(text: str) -> int:
+    """
+    Estimate token count from character length.
+
+    Uses a fixed 4:1 chars-per-token ratio. This is a rough estimate suitable
+    for chunk budgeting, not a precise tokenizer.
+
+    Args:
+        text: Input string.
+
+    Returns:
+        Estimated token count (minimum 1).
+    """
     return max(1, len(text) // CHARS_PER_TOKEN)
 
 
@@ -21,6 +33,23 @@ def split_by_sections(
     max_chars: int = MAX_CHARS,
     overlap_chars: int = OVERLAP_CHARS,
 ) -> list[tuple[str, str | None, int | None]]:
+    """
+    Split text sections into fixed-size chunks with overlap.
+
+    Each input section is a ``(text, page_number)`` pair. Large sections are
+    broken at paragraph boundaries first, then by character length. Adjacent
+    chunks receive a trailing overlap from the previous chunk to preserve
+    context for the embedding model.
+
+    Args:
+        sections: Sequence of ``(text, page_number)`` pairs to chunk.
+        max_chars: Maximum characters per output chunk (default 2048).
+        overlap_chars: Characters of overlap between consecutive chunks
+            (default 256).
+
+    Returns:
+        List of ``(text, heading, page_number)`` tuples.
+    """
     result: list[tuple[str, str | None, int | None]] = []
     if not sections:
         return result
