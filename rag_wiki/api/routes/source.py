@@ -304,16 +304,27 @@ async def get_source(
     db: Annotated[AsyncSession, Depends(get_db)] = ...,  # type: ignore[assignment]
 ) -> SourceResponse:
     """Return a single source by id."""
-    source = await _get_source_or_404(db, source_id)
-    return SourceResponse(
-        id=source.id,
-        file_name=source.file_name,
-        status=source.status,
-        created_at=source.created_at,
-        updated_at=source.updated_at,
-        metadata=source.metadata_,
-        job_id=None,
-    )
+    try:
+        source = await _get_source_or_404(db, source_id)
+        return SourceResponse(
+            id=source.id,
+            file_name=source.file_name,
+            status=source.status,
+            created_at=source.created_at,
+            updated_at=source.updated_at,
+            metadata=source.metadata_,
+            job_id=None,
+        )
+    except (NotFoundError, DatabaseError):
+        raise
+    except Exception as exc:
+        logger.error(
+            "failed_to_get_source",
+            source_id=str(source_id),
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        raise DatabaseError(f"Failed to fetch source {source_id}") from exc
 
 
 @router.delete(
