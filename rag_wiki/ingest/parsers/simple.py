@@ -59,6 +59,22 @@ def _detect_sections_md(text: str) -> list[str]:
 
 
 def parse_simple(file_path: str) -> list[ParsedChunk]:
+    """
+    Parse a plain-text or markdown file into text chunks.
+
+    Sections are detected by heading patterns (``## `` for markdown; ALL-CAPS
+    or colon-ending lines for plain text). Each section is then split into
+    fixed-size chunks with overlap.
+
+    Args:
+        file_path: Path to the text or markdown file on disk.
+
+    Returns:
+        A list of TextChunk objects. May be empty if the file is blank.
+
+    Raises:
+        ParseError: Propagated from chunking if the file cannot be read.
+    """
     with open(file_path, encoding="utf-8", errors="replace") as f:
         text = f.read()
 
