@@ -23,10 +23,11 @@ from typing import Any
 
 import structlog
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.db.models.graph import Entity, PublishedStatus, Relation
-from rag_wiki.db.models.source import Chunk
+from rag_wiki.db.models.source import Chunk, ChunkEntity
 from rag_wiki.exceptions import EntityResolutionError, ExtractionError, LLMProviderError
 from rag_wiki.graph.merge import merge_entity
 from rag_wiki.graph.schemas import ExtractedEntity, ExtractedRelation, MergeDecision
@@ -132,6 +133,7 @@ async def resolve_entities(
     """
     settings = get_settings()
     resolved: dict[int, Entity] = {}
+    deferred_chunk_links: list[dict[str, uuid.UUID]] = []
 
     for idx, candidate in enumerate(candidates):
         # 1. Compute embedding.
@@ -282,8 +284,18 @@ async def resolve_entities(
                         reason=decision.reasoning,
                         db=db,
                     )
-                    # Refresh to get the surviving entity.
-                    surviving = await db.get(Entity, decision.merged_into_id)
+                    # Refresh to get the surviving entity —
+                    # first check the vector search results to avoid a round-trip.
+                    surviving = next(
+                        (
+                            e
+                            for e in existing_candidates
+                            if e.id == decision.merged_into_id
+                        ),
+                        None,
+                    )
+                    if surviving is None:
+                        surviving = await db.get(Entity, decision.merged_into_id)
                     if surviving is None:
                         raise EntityResolutionError(
                             f"Merge target disappeared after merge: "
@@ -315,16 +327,9 @@ async def resolve_entities(
                         chunk_id=str(chunk.id),
                     )
 
-            # 9. Link the resolved entity to the chunk.
+            # 9. Defer chunk-entity link (batched after the loop).
             entity_to_link = resolved[idx]
-            await db.execute(
-                text(
-                    """
-                    INSERT INTO chunk_entities (chunk_id, entity_id)
-                    VALUES (:chunk_id, :entity_id)
-                    ON CONFLICT DO NOTHING
-                    """
-                ),
+            deferred_chunk_links.append(
                 {"chunk_id": chunk.id, "entity_id": entity_to_link.id},
             )
         finally:
@@ -333,6 +338,13 @@ async def resolve_entities(
                 text("SELECT pg_advisory_unlock(:lock_key)"),
                 {"lock_key": lock_key},
             )
+
+    # Batch insert chunk_entity links.
+    if deferred_chunk_links:
+        stmt = (
+            pg_insert(ChunkEntity).values(deferred_chunk_links).on_conflict_do_nothing()
+        )
+        await db.execute(stmt)
 
     # After all entities resolved, create Relation rows.
     if relations:

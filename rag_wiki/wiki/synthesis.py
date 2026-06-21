@@ -18,12 +18,13 @@ from pathlib import Path
 import structlog
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.db.models.graph import Entity, Relation
 from rag_wiki.db.models.jobs import Job
 from rag_wiki.db.models.source import Source
-from rag_wiki.db.models.wiki import WikiPage
+from rag_wiki.db.models.wiki import WikiPage, WikiPageEntity
 from rag_wiki.exceptions import AdvisoryLockExhausted, LLMProviderError
 from rag_wiki.providers.base import ChatProvider, CompletionRequest, EmbeddingProvider
 from rag_wiki.settings import get_settings
@@ -329,14 +330,18 @@ async def synthesize_entity_page(
         for row_obj in incoming.all():
             connected_entity_ids.add(row_obj[0])
 
-        for eid in connected_entity_ids:
-            await db.execute(
-                text(
-                    "INSERT INTO wiki_page_entities (wiki_page_id, entity_id) "
-                    "VALUES (:page_id, :entity_id) ON CONFLICT DO NOTHING"
-                ),
-                {"page_id": existing_row.id, "entity_id": eid},
+        if connected_entity_ids:
+            stmt = (
+                pg_insert(WikiPageEntity)
+                .values(
+                    [
+                        {"wiki_page_id": existing_row.id, "entity_id": eid}
+                        for eid in connected_entity_ids
+                    ]
+                )
+                .on_conflict_do_nothing()
             )
+            await db.execute(stmt)
 
         logger.info(
             "entity_page_synthesized",
