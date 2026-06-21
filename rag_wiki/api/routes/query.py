@@ -173,16 +173,40 @@ async def create_query(
             f"Failed to retrieve context for query {request.query!r}"
         ) from exc
 
-    answer: str | None = None
-    if request.generate_answer:
-        answer = await _generate_answer(
+    try:
+        answer: str | None = None
+        if request.generate_answer:
+            answer = await _generate_answer(
+                query=request.query,
+                retrieval=retrieval,
+                chat_provider=chat_provider,
+            )
+    except Exception as exc:
+        logger.error(
+            "query_answer_failed",
             query=request.query,
-            retrieval=retrieval,
-            chat_provider=chat_provider,
+            error=str(exc),
+            error_type=type(exc).__name__,
         )
+        raise RetrievalError(
+            f"Failed to generate answer for query {request.query!r}"
+        ) from exc
 
-    return QueryResponse(
-        query=request.query,
-        answer=answer,
-        retrieval=retrieval,
-    )
+    try:
+        response = QueryResponse(
+            query=request.query,
+            answer=answer,
+            retrieval=retrieval,
+        )
+    except Exception as exc:
+        logger.error(
+            "query_response_construction_failed",
+            query=request.query,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        raise RetrievalError(
+            f"Failed to build response for query {request.query!r}"
+        ) from exc
+
+    return response
