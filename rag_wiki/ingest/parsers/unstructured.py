@@ -7,6 +7,24 @@ from rag_wiki.ingest.schemas import ImageChunk, ParsedChunk, TableChunk, TextChu
 
 
 def parse_unstructured(file_path: str) -> list[ParsedChunk]:
+    """
+    Parse a document via the ``unstructured`` library into chunks.
+
+    Handles DOCX, HTML, and other formats supported by ``unstructured``.
+    Elements are classified as title sections, tables, images, or body text,
+    then assembled into fixed-size chunks with overlap.
+
+    Args:
+        file_path: Path to the document on disk.
+
+    Returns:
+        A list of TextChunk, TableChunk, and ImageChunk objects. May be empty
+        if the document has no extractable content.
+
+    Raises:
+        ImportError: If the ``unstructured`` library is not installed.
+        ParseError: Propagated from chunking on parse failure.
+    """
     try:
         from unstructured.partition.auto import partition
     except ImportError:
