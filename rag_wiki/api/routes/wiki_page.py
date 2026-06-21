@@ -145,8 +145,19 @@ async def get_wiki_page(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> WikiPageResponse:
     """Return a single wiki page by id."""
-    page = await _get_page_or_404(db, page_id)
-    return _page_to_response(page)
+    try:
+        page = await _get_page_or_404(db, page_id)
+        return _page_to_response(page)
+    except (NotFoundError, DatabaseError):
+        raise
+    except Exception as exc:
+        logger.error(
+            "failed_to_get_wiki_page",
+            page_id=str(page_id),
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        raise DatabaseError(f"Failed to fetch wiki page {page_id}") from exc
 
 
 @router.get(

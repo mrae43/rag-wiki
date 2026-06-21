@@ -167,16 +167,27 @@ async def get_entity(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EntityResponse:
     """Return a single entity by id."""
-    entity = await _get_entity_or_404(db, entity_id)
-    return EntityResponse(
-        id=entity.id,
-        name=entity.name,
-        entity_type=entity.entity_type,
-        status=entity.status,
-        description=entity.description,
-        created_at=entity.created_at,
-        updated_at=entity.updated_at,
-    )
+    try:
+        entity = await _get_entity_or_404(db, entity_id)
+        return EntityResponse(
+            id=entity.id,
+            name=entity.name,
+            entity_type=entity.entity_type,
+            status=entity.status,
+            description=entity.description,
+            created_at=entity.created_at,
+            updated_at=entity.updated_at,
+        )
+    except (NotFoundError, DatabaseError):
+        raise
+    except Exception as exc:
+        logger.error(
+            "failed_to_get_entity",
+            entity_id=str(entity_id),
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        raise DatabaseError(f"Failed to fetch entity {entity_id}") from exc
 
 
 @router.get(
