@@ -49,13 +49,17 @@ def _advisory_lock_key(entity_id_str: str) -> int:
     )
 
 
+async def _try_advisory_lock(db: AsyncSession, lock_key: int) -> bool:
+    result = await db.execute(
+        text("SELECT pg_try_advisory_lock(:lock_key)"),
+        {"lock_key": lock_key},
+    )
+    return bool(result.scalar())
+
+
 async def _acquire_advisory_lock_with_retry(db: AsyncSession, lock_key: int) -> bool:
     for delay in _ADVISORY_LOCK_DELAYS:
-        result = await db.execute(
-            text("SELECT pg_try_advisory_lock(:lock_key)"),
-            {"lock_key": lock_key},
-        )
-        if result.scalar():
+        if await _try_advisory_lock(db, lock_key):
             return True
         await asyncio.sleep(delay)
     return False
