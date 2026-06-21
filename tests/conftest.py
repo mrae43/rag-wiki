@@ -10,6 +10,8 @@ FastAPI test client, and a settings override.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 from collections.abc import AsyncGenerator
 
 import pytest
@@ -32,6 +34,26 @@ TEST_DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://rag_wiki:rag_wiki@localhost:5432/rag_wiki_test",
 )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_spacy_model() -> None:
+    """Ensure en_core_web_sm is available for the unstructured parser."""
+    try:
+        import spacy
+
+        spacy.load("en_core_web_sm")
+    except OSError:
+        try:
+            subprocess.check_call(
+                [sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            pytest.skip(
+                "en_core_web_sm unavailable — skipping tests that need the parser"
+            )
 
 
 @pytest.fixture(scope="session", autouse=True)
