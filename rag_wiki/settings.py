@@ -6,6 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """
+    Application-wide configuration loaded from environment variables.
+
+    All runtime configuration (database, LLM, embedding, parser, retrieval,
+    worker, API, logging) is sourced from env vars via pydantic-settings.
+    Never hardcode config values in application code.
+    """
+
     # Database
     database_url: str
 
@@ -74,4 +82,14 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """
+    Return a cached Settings instance.
+
+    Uses lru_cache so Settings() is constructed exactly once per process.
+    All callers should use this function rather than instantiating Settings
+    directly to avoid repeated env-var reads.
+
+    Returns:
+        A singleton Settings object populated from environment variables.
+    """
     return Settings()

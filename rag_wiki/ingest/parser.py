@@ -20,6 +20,26 @@ def parse_document(
     file_path: str,
     source_metadata: dict[str, object] | None = None,
 ) -> list[ParsedChunk]:
+    """
+    Parse a document into a list of chunks using the appropriate engine.
+
+    Dispatches to the PDF, OCR, simple text, or unstructured parser based on
+    MIME type or an explicit ``source_metadata["parser"]`` override.
+
+    Args:
+        file_path: Absolute or relative path to the document on disk.
+        source_metadata: Optional metadata dict that may contain a ``"parser"``
+            key to force a specific engine (``"pdf"``, ``"ocr"``, ``"simple"``,
+            ``"unstructured"``).
+
+    Returns:
+        A list of ParsedChunk objects. May be empty if the document has no
+        extractable content.
+
+    Raises:
+        ParseError: If the file does not exist, a required parser dependency is
+            missing, or the engine identifier is unknown.
+    """
     if not os.path.isfile(file_path):
         raise ParseError(f"File not found: {file_path}")
 

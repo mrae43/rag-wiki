@@ -128,6 +128,23 @@ def _try_ocr(page: fitz.Page) -> str:
 
 
 def parse_pdf(file_path: str) -> list[ParsedChunk]:
+    """
+    Parse a PDF file into text, table, and image chunks via PyMuPDF.
+
+    Extracts text (with OCR fallback for scanned pages), inline tables, and
+    embedded images. Text is sectioned by heading font size, then split into
+    fixed-size chunks with overlap.
+
+    Args:
+        file_path: Path to the PDF file on disk.
+
+    Returns:
+        A list of TextChunk, TableChunk, and ImageChunk objects. May be empty
+        if the PDF has no extractable content.
+
+    Raises:
+        ParseError: Propagated from chunking if the file cannot be parsed.
+    """
     doc = fitz.open(file_path)
     file_name = os.path.basename(file_path)
     doc_id_prefix = f"pdf:{file_path}"

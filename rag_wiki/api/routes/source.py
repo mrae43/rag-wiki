@@ -9,6 +9,7 @@ picks up the job from the Postgres-native queue.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import uuid
 from datetime import datetime
@@ -164,11 +165,13 @@ async def create_source(
                     )
                 await f.write(chunk)
     except PayloadTooLargeError:
-        await _delete_upload(file_path)
+        with contextlib.suppress(OSError):
+            await _delete_upload(file_path)
         raise
 
     if total_size == 0:
-        await _delete_upload(file_path)
+        with contextlib.suppress(OSError):
+            await _delete_upload(file_path)
         raise BadRequestError("Empty files are not allowed")
 
     file_type = file.content_type or "application/octet-stream"
@@ -201,7 +204,8 @@ async def create_source(
             file_path=str(file_path),
             error=str(exc),
         )
-        await _delete_upload(file_path)
+        with contextlib.suppress(OSError):
+            await _delete_upload(file_path)
         raise
 
     logger.info(
@@ -233,6 +237,7 @@ async def _delete_upload(file_path: Path) -> None:
             file_path=str(file_path),
             error=str(exc),
         )
+        raise
 
 
 @router.get(
