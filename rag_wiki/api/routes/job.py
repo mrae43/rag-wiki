@@ -137,16 +137,27 @@ async def get_job(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> JobResponse:
     """Return a single job by id."""
-    job = await _get_job_or_404(db, job_id)
-    return JobResponse(
-        id=job.id,
-        job_type=job.job_type,
-        status=job.status,
-        payload=job.payload,
-        result=job.result,
-        error_message=job.error_message,
-        created_at=job.created_at,
-        updated_at=job.updated_at,
-        claimed_at=job.claimed_at,
-        completed_at=job.completed_at,
-    )
+    try:
+        job = await _get_job_or_404(db, job_id)
+        return JobResponse(
+            id=job.id,
+            job_type=job.job_type,
+            status=job.status,
+            payload=job.payload,
+            result=job.result,
+            error_message=job.error_message,
+            created_at=job.created_at,
+            updated_at=job.updated_at,
+            claimed_at=job.claimed_at,
+            completed_at=job.completed_at,
+        )
+    except (NotFoundError, DatabaseError):
+        raise
+    except Exception as exc:
+        logger.error(
+            "failed_to_get_job",
+            job_id=str(job_id),
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        raise DatabaseError(f"Failed to fetch job {job_id}") from exc
