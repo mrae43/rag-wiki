@@ -181,12 +181,14 @@ mirror pattern when adding a new module.
 
 ## Quality commands
 
+All commands must be run through `uv run` to use the correct venv:
+
 ```bash
-ruff check .          # lint (fix with --fix)
-ruff format .         # format
-mypy .                # type checking
-pytest                # all tests
-pytest tests/graph/   # specific module
+uv run ruff check .          # lint (fix with --fix)
+uv run ruff format .         # format
+uv run mypy .                # type checking
+uv run pytest                # all tests
+uv run pytest tests/graph/   # specific module
 ```
 
 Run in order: `ruff check` → `ruff format` → `mypy` → `pytest`.
