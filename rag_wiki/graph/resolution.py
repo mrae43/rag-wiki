@@ -90,6 +90,57 @@ def _advisory_lock_key(canonical_name: str) -> int:
     )
 
 
+async def _try_advisory_lock(db: AsyncSession, lock_key: int) -> bool:
+    result = await db.execute(
+        text("SELECT pg_try_advisory_lock(:lock_key)"),
+        {"lock_key": lock_key},
+    )
+    return bool(result.scalar())
+
+
+async def _release_advisory_lock(db: AsyncSession, lock_key: int) -> None:
+    await db.execute(
+        text("SELECT pg_advisory_unlock(:lock_key)"),
+        {"lock_key": lock_key},
+    )
+
+
+async def _search_similar_entities(
+    db: AsyncSession,
+    embedding: list[float],
+    threshold: float,
+    top_k: int,
+) -> list[Entity]:
+    vec_literal = "[" + ",".join(str(v) for v in embedding) + "]"
+    result = await db.execute(
+        text(
+            """
+            SELECT id, name, entity_type, description,
+                   embedding <-> :vec AS distance
+            FROM entities
+            WHERE embedding <-> :vec <= :threshold
+            ORDER BY distance
+            LIMIT :top_k
+            """
+        ),
+        {"vec": vec_literal, "threshold": threshold, "top_k": top_k},
+    )
+    rows = result.all()
+    return [
+        Entity(
+            id=row.id,
+            name=row.name,
+            entity_type=row.entity_type,
+            description=row.description,
+        )
+        for row in rows
+    ]
+
+
+async def _get_entity_by_id(db: AsyncSession, entity_id: uuid.UUID) -> Entity | None:
+    return await db.get(Entity, entity_id)
+
+
 def _build_candidate_block(candidates: list[Entity]) -> str:
     """Format a list of existing entities for the resolution prompt."""
     lines: list[str] = []
@@ -155,12 +206,7 @@ async def resolve_entities(
 
         # 2. Acquire advisory lock.
         lock_key = _advisory_lock_key(candidate.canonical_name)
-        lock_result = await db.execute(
-            text("SELECT pg_try_advisory_lock(:lock_key)"),
-            {"lock_key": lock_key},
-        )
-        acquired = lock_result.scalar()
-        if not acquired:
+        if not await _try_advisory_lock(db, lock_key):
             logger.warning(
                 "advisory lock not acquired, skipping candidate",
                 canonical_name=candidate.canonical_name,
@@ -171,37 +217,12 @@ async def resolve_entities(
 
         try:
             # 3. Vector search.
-            distance_threshold = settings.entity_resolution_distance_threshold
-            top_k = settings.entity_resolution_top_k
-
-            vec_literal = "[" + ",".join(str(v) for v in embedding) + "]"
-            search_result = await db.execute(
-                text(
-                    """
-                    SELECT id, name, entity_type, description,
-                           embedding <-> :vec AS distance
-                    FROM entities
-                    WHERE embedding <-> :vec <= :threshold
-                    ORDER BY distance
-                    LIMIT :top_k
-                    """
-                ),
-                {
-                    "vec": vec_literal,
-                    "threshold": distance_threshold,
-                    "top_k": top_k,
-                },
+            existing_candidates = await _search_similar_entities(
+                db,
+                embedding,
+                settings.entity_resolution_distance_threshold,
+                settings.entity_resolution_top_k,
             )
-            rows = search_result.all()
-            existing_candidates: list[Entity] = []
-            for row in rows:
-                ent = Entity(
-                    id=row.id,
-                    name=row.name,
-                    entity_type=row.entity_type,
-                    description=row.description,
-                )
-                existing_candidates.append(ent)
 
             if not existing_candidates:
                 # 4. No candidates → create new Entity.
@@ -295,7 +316,7 @@ async def resolve_entities(
                         None,
                     )
                     if surviving is None:
-                        surviving = await db.get(Entity, decision.merged_into_id)
+                        surviving = await _get_entity_by_id(db, decision.merged_into_id)
                     if surviving is None:
                         raise EntityResolutionError(
                             f"Merge target disappeared after merge: "
@@ -333,11 +354,7 @@ async def resolve_entities(
                 {"chunk_id": chunk.id, "entity_id": entity_to_link.id},
             )
         finally:
-            # Release advisory lock.
-            await db.execute(
-                text("SELECT pg_advisory_unlock(:lock_key)"),
-                {"lock_key": lock_key},
-            )
+            await _release_advisory_lock(db, lock_key)
 
     # Batch insert chunk_entity links.
     if deferred_chunk_links:
