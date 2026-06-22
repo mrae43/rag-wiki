@@ -17,6 +17,7 @@ import openai
 import structlog
 
 from rag_wiki.exceptions import LLMProviderError
+from rag_wiki.prompts.constants import CAPTION_PROMPT
 from rag_wiki.providers.base import (
     ChatProvider,
     CompletionRequest,
@@ -143,7 +144,7 @@ class OpenAIProvider(ChatProvider, EmbeddingProvider):
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": "Describe this image."},
+                    {"type": "text", "text": CAPTION_PROMPT},
                     {"type": "image_url", "image_url": {"url": data_url}},
                 ],
             },

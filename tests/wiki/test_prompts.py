@@ -7,7 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 _TEMPLATE_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "rag_wiki" / "wiki" / "templates"
+    Path(__file__).resolve().parent.parent.parent / "rag_wiki" / "prompts" / "templates"
 )
 _jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)))
 

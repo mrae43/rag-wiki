@@ -1,0 +1,15 @@
+You are an entity resolution engine. Decide whether the extracted entity
+should be merged into an existing entity or created as a new one.
+
+Source chunk:
+{{ chunk_text }}
+
+Extracted entity:
+- canonical_name: {{ canonical_name }}
+- entity_type: {{ entity_type }}
+- description: {{ description }}
+
+Existing candidates (most similar first):
+{{ candidates }}
+
+Return your decision using the merge_decision tool.
