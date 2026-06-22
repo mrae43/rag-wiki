@@ -13,10 +13,8 @@ import asyncio
 import datetime
 import hashlib
 import uuid
-from pathlib import Path
 
 import structlog
-from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,15 +24,13 @@ from rag_wiki.db.models.jobs import Job
 from rag_wiki.db.models.source import Source
 from rag_wiki.db.models.wiki import WikiPage, WikiPageEntity
 from rag_wiki.exceptions import AdvisoryLockExhausted, LLMProviderError
+from rag_wiki.prompts import render_template
 from rag_wiki.providers.base import ChatProvider, CompletionRequest, EmbeddingProvider
 from rag_wiki.settings import get_settings
 from rag_wiki.wiki.context import build_entity_context, build_source_summary_context
 from rag_wiki.wiki.slug import generate_slug
 
 logger = structlog.get_logger(__name__)
-
-_TEMPLATE_DIR = Path(__file__).parent / "templates"
-_jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)))
 
 JOB_TYPE_SYNTHESIZE_ENTITY = "synthesize_entity"
 JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY = "synthesize_source_summary"
@@ -256,8 +252,7 @@ async def synthesize_entity_page(
         )
 
         # Step 10: Render Jinja2 template.
-        template = _jinja_env.get_template("synthesize_entity.j2")
-        prompt = template.render(**context)
+        prompt = render_template("synthesize_entity.j2", **context)
 
         # Step 11: Call LLM.
         settings = get_settings()
@@ -431,8 +426,7 @@ async def synthesize_source_summary(
         )
 
         # Step 4: Render Jinja2 template.
-        template = _jinja_env.get_template("synthesize_source_summary.j2")
-        prompt = template.render(**context)
+        prompt = render_template("synthesize_source_summary.j2", **context)
 
         # Step 5: Call LLM (RetryingProvider handles transient retries).
         settings = get_settings()
