@@ -31,6 +31,7 @@ from rag_wiki.db.models.source import Chunk, ChunkEntity
 from rag_wiki.exceptions import EntityResolutionError, ExtractionError, LLMProviderError
 from rag_wiki.graph.merge import merge_entity
 from rag_wiki.graph.schemas import ExtractedEntity, ExtractedRelation, MergeDecision
+from rag_wiki.prompts import render_template
 from rag_wiki.providers.base import (
     ChatProvider,
     CompletionRequest,
@@ -40,23 +41,6 @@ from rag_wiki.providers.base import (
 from rag_wiki.settings import get_settings
 
 logger = structlog.get_logger(__name__)
-
-_RESOLUTION_PROMPT = """\
-You are an entity resolution engine. Decide whether the extracted entity
-should be merged into an existing entity or created as a new one.
-
-Source chunk:
-{chunk_text}
-
-Extracted entity:
-- canonical_name: {canonical_name}
-- entity_type: {entity_type}
-- description: {description}
-
-Existing candidates (most similar first):
-{candidates}
-
-Return your decision using the merge_decision tool."""
 
 _MERGE_DECISION_TOOL = ToolDefinition(
     name="merge_decision",
@@ -245,12 +229,13 @@ async def resolve_entities(
             else:
                 # 5. Ask LLM for merge decision.
                 candidate_block = _build_candidate_block(existing_candidates)
-                prompt = _RESOLUTION_PROMPT.format(
+                prompt = render_template(
+                    "resolution.j2",
+                    chunk_text=chunk.text_content or "",
                     canonical_name=candidate.canonical_name,
                     entity_type=candidate.entity_type,
                     description=candidate.description,
                     candidates=candidate_block,
-                    chunk_text=chunk.text_content or "",
                 )
                 request = CompletionRequest(
                     system=prompt,
