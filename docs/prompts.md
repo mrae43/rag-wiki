@@ -48,6 +48,7 @@ Every LLM system instruction used by the system lives in
 | **Trigger** | Per-image during ingestion pipeline, before chunking |
 | **Constraints** | Single static string `"Describe this image."`; no variables |
 | **Stop / escalation** | LLM error → `LLMProviderError`; image skipped |
+| **§4.3 note** | Minimal prompt — exempt from full harness engineering requirements (single-purpose, no variables) |
 
 ---
 
