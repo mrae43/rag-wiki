@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.api.dependencies import get_chat_provider, get_db, get_embedding_provider
 from rag_wiki.exceptions import RetrievalError
+from rag_wiki.prompts.constants import QUERY_SYSTEM_PROMPT
 from rag_wiki.providers.base import (
     ChatProvider,
     CompletionRequest,
@@ -109,11 +110,7 @@ async def _generate_answer(
     """Ask the configured query model to answer from retrieved context."""
     settings = get_settings()
     context = _format_context(retrieval)
-    system = (
-        "You are a helpful research assistant. Answer the user's question "
-        "using only the retrieved context below. If the context does not "
-        "contain enough information, say so."
-    )
+    system = QUERY_SYSTEM_PROMPT
     user = f"Question: {query}\n\nContext:\n{context}"
 
     response = await chat_provider.complete(
