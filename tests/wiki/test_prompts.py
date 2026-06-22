@@ -1,21 +1,14 @@
-"""Tests for rag_wiki.wiki.prompts — Jinja2 template rendering."""
+"""Tests for rag_wiki.prompts — Jinja2 template rendering."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from jinja2 import Environment, FileSystemLoader
-
-_TEMPLATE_DIR = (
-    Path(__file__).resolve().parent.parent.parent / "rag_wiki" / "prompts" / "templates"
-)
-_jinja_env = Environment(loader=FileSystemLoader(str(_TEMPLATE_DIR)))
+from rag_wiki.prompts import render_template
 
 
 def test_synthesize_entity_renders_with_minimal_context() -> None:
     """Entity template renders without errors given minimal context."""
-    template = _jinja_env.get_template("synthesize_entity.j2")
-    result = template.render(
+    result = render_template(
+        "synthesize_entity.j2",
         entity_name="TestEntity",
         entity_type="concept",
         entity_description="A test",
@@ -30,8 +23,8 @@ def test_synthesize_entity_renders_with_minimal_context() -> None:
 
 def test_synthesize_entity_renders_with_existing_page() -> None:
     """Entity template renders update variant when existing_page is provided."""
-    template = _jinja_env.get_template("synthesize_entity.j2")
-    result = template.render(
+    result = render_template(
+        "synthesize_entity.j2",
         entity_name="TestEntity",
         entity_type="concept",
         entity_description="A test",
@@ -58,8 +51,8 @@ def test_synthesize_entity_renders_with_existing_page() -> None:
 
 def test_synthesize_entity_handles_empty_lists() -> None:
     """Entity template handles empty edges, source_chunks, and known_entities."""
-    template = _jinja_env.get_template("synthesize_entity.j2")
-    result = template.render(
+    result = render_template(
+        "synthesize_entity.j2",
         entity_name="E",
         entity_type="concept",
         entity_description="",
@@ -74,8 +67,8 @@ def test_synthesize_entity_handles_empty_lists() -> None:
 
 def test_synthesize_entity_indentation_preserved() -> None:
     """Jinja2 trim_blocks/lstrip_blocks doesn't break markdown indentation."""
-    template = _jinja_env.get_template("synthesize_entity.j2")
-    result = template.render(
+    result = render_template(
+        "synthesize_entity.j2",
         entity_name="E",
         entity_type="concept",
         entity_description="",
@@ -90,8 +83,8 @@ def test_synthesize_entity_indentation_preserved() -> None:
 
 def test_synthesize_source_summary_renders_with_minimal_context() -> None:
     """Source summary template renders without errors."""
-    template = _jinja_env.get_template("synthesize_source_summary.j2")
-    result = template.render(
+    result = render_template(
+        "synthesize_source_summary.j2",
         source_file_name="doc.txt",
         ingested_at="2024-01-01T00:00:00",
         chunk_count=0,
@@ -107,8 +100,8 @@ def test_synthesize_source_summary_renders_with_minimal_context() -> None:
 
 def test_synthesize_source_summary_with_entities_and_relations() -> None:
     """Source summary renders with entities and relations."""
-    template = _jinja_env.get_template("synthesize_source_summary.j2")
-    result = template.render(
+    result = render_template(
+        "synthesize_source_summary.j2",
         source_file_name="doc.txt",
         ingested_at="2024-01-01T00:00:00",
         chunk_count=1,

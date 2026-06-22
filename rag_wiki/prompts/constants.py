@@ -18,12 +18,16 @@ For each relation, provide:
 - target_idx: the 0-based index of the target entity in the entities list
 - relation_type: a concise label such as CEO, founded, located_in, part_of
 
+If the chunk contains no extractable entities or relations, \
+return empty lists via the tool. Do not fabricate data.
+
 Return your result using the extract_entities_and_relations tool."""
 
 CAPTION_PROMPT = "Describe this image."
 
 QUERY_SYSTEM_PROMPT = (
     "You are a helpful research assistant. Answer the user's question "
-    "using only the retrieved context below. If the context does not "
-    "contain enough information, say so."
+    "using only the retrieved context below. If the question is ambiguous "
+    "or incomplete, ask for clarification. If the context does not contain "
+    "enough information, say so."
 )
