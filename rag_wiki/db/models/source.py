@@ -1,5 +1,5 @@
 """rag_wiki.db.models.source
-------------------------
+--------------------
 Source, chunk, and chunk-to-entity join models.
 
 Defines the ingestion pipeline storage: ``sources`` (document metadata),
@@ -49,6 +49,9 @@ class Source(Base, UUIDMixin, TimestampMixin):
         server_default=ProcessingStatus.PENDING,
     )
     metadata_: Mapped[dict[str, Any] | None] = mapped_column(
+        sa.dialects.postgresql.JSONB, nullable=True
+    )
+    source_plan: Mapped[dict[str, Any] | None] = mapped_column(
         sa.dialects.postgresql.JSONB, nullable=True
     )
 
