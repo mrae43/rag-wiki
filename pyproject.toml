@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mineru = ["magic-pdf>=0.6"]
+s3 = ["aioboto3>=13.0"]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
