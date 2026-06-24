@@ -480,3 +480,90 @@ async def assemble_context(
         chunks_fetched=chunks_fetched,
         chunks_after_dedup=chunks_after_dedup,
     )
+
+
+def merge_retrieval_results(results: list[RetrievalResult]) -> RetrievalResult:
+    """Merge multiple RetrievalResult objects into one.
+
+    Used by the comparison query path where each entity is retrieved
+    independently and results are combined into a single response.
+    """
+    if not results:
+        raise ValueError("Cannot merge empty list of RetrievalResult")
+    if len(results) == 1:
+        return results[0]
+
+    first = results[0]
+
+    seen_seed_ids: set[uuid.UUID] = set()
+    merged_seeds: list[SeedResult] = []
+    for r in results:
+        for seed in r.seeds:
+            if seed.entity_id not in seen_seed_ids:
+                seen_seed_ids.add(seed.entity_id)
+                merged_seeds.append(seed)
+
+    seen_edge_keys: set[tuple[str, str, str]] = set()
+    merged_edges: list[SubgraphEdge] = []
+    for r in results:
+        for edge in r.subgraph:
+            key = (edge.source_name, edge.relation, edge.target_name)
+            if key not in seen_edge_keys:
+                seen_edge_keys.add(key)
+                merged_edges.append(edge)
+
+    wiki = next((r.wiki_page for r in results if r.wiki_page is not None), None)
+
+    seen_chunk_ids: set[uuid.UUID] = set()
+    merged_seed_chunks: list[ScoredChunk] = []
+    for r in results:
+        for chunk in r.seed_chunks:
+            if chunk.chunk_id not in seen_chunk_ids:
+                seen_chunk_ids.add(chunk.chunk_id)
+                merged_seed_chunks.append(chunk)
+
+    seen_hop_ids: set[uuid.UUID] = set()
+    merged_hop_chunks: list[ScoredChunk] = []
+    for r in results:
+        for chunk in r.hop1_chunks:
+            if chunk.chunk_id not in seen_hop_ids:
+                seen_hop_ids.add(chunk.chunk_id)
+                merged_hop_chunks.append(chunk)
+
+    total_tokens = sum(r.total_tokens_used for r in results)
+    max_budget = max(r.token_counts.budget for r in results)
+
+    merged_token_counts = SlotTokenCounts(
+        anchor=sum(r.token_counts.anchor for r in results),
+        subgraph=sum(r.token_counts.subgraph for r in results),
+        wiki_page=sum(r.token_counts.wiki_page for r in results),
+        seed_chunks=sum(r.token_counts.seed_chunks for r in results),
+        hop_chunks=sum(r.token_counts.hop_chunks for r in results),
+        instruction=sum(r.token_counts.instruction for r in results),
+        total=total_tokens,
+        budget=max_budget,
+        utilization=total_tokens / max_budget if max_budget else 0.0,
+    )
+
+    seen_all: set[uuid.UUID] = set()
+    for r in results:
+        for c in r.seed_chunks:
+            seen_all.add(c.chunk_id)
+        for c in r.hop1_chunks:
+            seen_all.add(c.chunk_id)
+
+    return RetrievalResult(
+        query=first.query,
+        retrieved_at=first.retrieved_at,
+        seeds=merged_seeds,
+        subgraph=merged_edges,
+        wiki_page=wiki,
+        seed_chunks=merged_seed_chunks,
+        hop1_chunks=merged_hop_chunks,
+        token_counts=merged_token_counts,
+        total_tokens_used=total_tokens,
+        entities_traversed=sum(r.entities_traversed for r in results),
+        entities_after_truncation=sum(r.entities_after_truncation for r in results),
+        chunks_fetched=sum(r.chunks_fetched for r in results),
+        chunks_after_dedup=len(seen_all),
+    )
