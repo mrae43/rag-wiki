@@ -17,12 +17,14 @@ from rag_wiki.exceptions import StorageError
 from rag_wiki.settings import Settings
 from rag_wiki.storage.base import StorageProvider
 from rag_wiki.storage.local import LocalStorageProvider
+from rag_wiki.storage.s3 import S3StorageProvider
 
 logger = structlog.get_logger(__name__)
 
 
 STORAGE_PROVIDERS: dict[str, Callable[[Settings], StorageProvider]] = {
     "local": LocalStorageProvider,
+    "s3": S3StorageProvider,
 }
 
 
