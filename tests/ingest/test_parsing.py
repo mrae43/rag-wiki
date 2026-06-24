@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+import uuid
 from collections.abc import Generator
 
 import fitz
@@ -17,6 +18,7 @@ from rag_wiki.ingest.parser import parse_document
 from rag_wiki.ingest.parsers.pdf import parse_pdf
 from rag_wiki.ingest.parsers.simple import parse_simple
 from rag_wiki.ingest.schemas import ChunkType, ImageChunk, TextChunk
+from rag_wiki.planner.base import ParserType, PDFParserMode, SourcePlan
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -133,6 +135,29 @@ def invalid_pdf() -> Generator[str, None, None]:
     path = _write_temp("not a real pdf", ".pdf")
     yield path
     os.unlink(path)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _source_plan(
+    parser: ParserType, pdf_mode: PDFParserMode | None = None
+) -> SourcePlan:
+    """Build a minimal SourcePlan for testing."""
+    return SourcePlan(
+        source_id=uuid.uuid4(),
+        detected_type=parser.value,
+        detected_structure="unstructured",
+        selected_parser=parser,
+        pdf_mode=pdf_mode,
+        chunking_strategy="section",
+        confidence=1.0,
+        fallback_parser=ParserType.SIMPLE,
+        rationale="test",
+        planner_version="1.0.0",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -317,50 +342,52 @@ class TestParseDocument:
     """Tests for parse_document (parser routing/dispatch)."""
 
     def test_routes_pdf_by_mime(self, pdf_with_text: str) -> None:
-        """Verify parse_document routes .pdf files to the PDF parser by MIME type."""
-        chunks = parse_document(pdf_with_text)
+        """Verify parse_document routes .pdf files to the PDF parser by plan."""
+        plan = _source_plan(ParserType.PDF)
+        chunks = parse_document(pdf_with_text, plan)
         assert len(chunks) > 0
 
     def test_routes_txt_by_mime(self, txt_file: str) -> None:
-        """Verify parse_document routes .txt files to the simple parser by MIME type."""
-        chunks = parse_document(txt_file)
+        """Verify parse_document routes .txt files to the simple parser by plan."""
+        plan = _source_plan(ParserType.SIMPLE)
+        chunks = parse_document(txt_file, plan)
         assert len(chunks) > 0
         assert all(c.chunk_type == ChunkType.TEXT for c in chunks)
 
     def test_routes_md_by_mime(self, md_file: str) -> None:
-        """Verify parse_document routes .md files to the simple parser by MIME type."""
-        chunks = parse_document(md_file)
+        """Verify parse_document routes .md files to the simple parser by plan."""
+        plan = _source_plan(ParserType.SIMPLE)
+        chunks = parse_document(md_file, plan)
         assert len(chunks) > 0
         assert all(c.chunk_type == ChunkType.TEXT for c in chunks)
 
     def test_override_to_simple(self, pdf_with_text: str) -> None:
-        """Verify parser override to 'simple' works on a .pdf file."""
-        chunks = parse_document(pdf_with_text, source_metadata={"parser": "simple"})
+        """Verify parse_document accepts a plan with SIMPLE parser for a .pdf file."""
+        plan = _source_plan(ParserType.SIMPLE)
+        chunks = parse_document(pdf_with_text, plan)
         assert len(chunks) > 0
 
     def test_override_to_pdf(self, txt_file: str) -> None:
-        """Verify parser override to 'pdf' works on a .txt file."""
-        chunks = parse_document(txt_file, source_metadata={"parser": "pdf"})
+        """Verify parse_document accepts a plan with PDF parser for a .txt file."""
+        plan = _source_plan(ParserType.PDF)
+        chunks = parse_document(txt_file, plan)
         assert len(chunks) > 0
 
     def test_nonexistent_file(self) -> None:
         """Verify parse_document raises ParseError for a nonexistent file path."""
         from rag_wiki.exceptions import ParseError
 
+        plan = _source_plan(ParserType.SIMPLE)
         with pytest.raises(ParseError):
-            parse_document("/nonexistent/file.pdf")
+            parse_document("/nonexistent/file.pdf", plan)
 
-    def test_empty_source_metadata(self, txt_file: str) -> None:
-        """Verify parse_document works with an empty source_metadata dict."""
-        chunks = parse_document(txt_file, source_metadata={})
-        assert len(chunks) > 0
-
-    def test_unknown_engine_override(self, pdf_with_text: str) -> None:
-        """Verify parse_document raises ParseError for an unknown parser override."""
+    def test_unknown_engine_raises_parse_error(self, pdf_with_text: str) -> None:
+        """Verify parse_document raises ParseError for an unknown parser in plan."""
         from rag_wiki.exceptions import ParseError
 
+        plan = _source_plan(ParserType.MINERU)  # not yet implemented
         with pytest.raises(ParseError):
-            parse_document(pdf_with_text, source_metadata={"parser": "nonexistent"})
+            parse_document(pdf_with_text, plan)
 
 
 # ---------------------------------------------------------------------------
@@ -375,17 +402,19 @@ class TestErrorHandling:
         """Verify parse_document raises ParseError for an unreadable file path."""
         from rag_wiki.exceptions import ParseError
 
+        plan = _source_plan(ParserType.SIMPLE)
         with pytest.raises(ParseError):
-            parse_document("/dev/null/nope")
+            parse_document("/dev/null/nope", plan)
 
     def test_empty_file_path(self) -> None:
         """Verify parse_document raises ParseError when the file has been deleted."""
         from rag_wiki.exceptions import ParseError
 
+        plan = _source_plan(ParserType.SIMPLE)
         path = _write_temp("", ".txt")
         os.unlink(path)
         with pytest.raises(ParseError):
-            parse_document(path)
+            parse_document(path, plan)
 
     def test_invalid_pdf_bytes(self, invalid_pdf: str) -> None:
         """Verify parse_pdf raises fitz.FileDataError for invalid PDF content."""
