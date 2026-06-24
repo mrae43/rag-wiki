@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """
     Application-wide configuration loaded from environment variables.
 
-    All runtime configuration (database, LLM, embedding, parser, retrieval,
+    All runtime configuration (database, LLM, embedding, planner, retrieval,
     worker, API, logging) is sourced from env vars via pydantic-settings.
     Never hardcode config values in application code.
     """
@@ -44,8 +44,14 @@ class Settings(BaseSettings):
     hnsw_m: int = 24
     hnsw_ef_construction: int = 200
 
-    # Parser
-    parser: Literal["lightweight", "mineru"] = "lightweight"
+    # Planner
+    planner_version: str = "1.0.0"
+    planner_confidence_high: float = 0.8
+    planner_confidence_low: float = 0.5
+    planner_confidence_minimum: float = 0.5
+    planner_density_large_threshold_bytes: int = 10_485_760
+    llm_model_query_classification: str = "gpt-4o-mini"
+    planner_query_classification_timeout_ms: int = 500
 
     # Retrieval
     retrieval_seed_count: int = 3
