@@ -120,7 +120,7 @@ class QueryPlanner:
                 rationale=rationale,
                 model_used=model,
             )
-            self._check_confidence(plan, explicit_type)
+            self._check_confidence(plan, None)
             return plan
 
         if self._chat_provider is not None:
@@ -193,6 +193,7 @@ class QueryPlanner:
                 system=QUERY_CLASSIFICATION_PROMPT,
                 messages=[Message(role="user", content=query)],
                 model=self._settings.llm_model_query_classification,
+                timeout_ms=self._settings.planner_query_classification_timeout_ms,
             )
         )
         content = (response.content or "").strip()
@@ -222,8 +223,10 @@ class QueryPlanner:
         )
 
     def _cache_put(self, key: str, value: tuple[str, float, str, str | None]) -> None:
-        if len(self._cache) >= _CACHE_MAXSIZE:
-            self._cache.clear()
+        if key in self._cache:
+            self._cache.pop(key)
+        elif len(self._cache) >= _CACHE_MAXSIZE:
+            self._cache.pop(next(iter(self._cache)))
         self._cache[key] = value
 
     def _build_plan(
@@ -237,6 +240,14 @@ class QueryPlanner:
         model_used: str | None = None,
     ) -> QueryPlan:
         depth, seed_count, termination = _RETRIEVAL_DEPTH_MAP[classified_type]
+        if (
+            self._settings.planner_confidence_low
+            <= confidence
+            < self._settings.planner_confidence_high
+        ):
+            depth = "deep"
+            seed_count = max(seed_count, 3)
+            termination = f"escalated: mid-confidence {confidence}"
         return QueryPlan(
             query_id=query_id,
             raw_query=query,

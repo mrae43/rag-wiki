@@ -376,6 +376,35 @@ class TestQueryPlannerCache:
         assert plan2.classification_source == "llm"
         assert llm_provider.call_count == 2
 
+    async def test_cache_eviction_removes_oldest(
+        self, settings: Settings, query_id: uuid.UUID
+    ) -> None:
+        cache_size_settings = Settings(
+            database_url="postgresql+asyncpg://u:p@localhost:5432/test",
+            planner_confidence_minimum=0.1,
+            planner_confidence_low=0.1,
+            planner_confidence_high=1.0,
+        )
+        provider = _FakeLLMProvider(
+            response_json=(
+                '{"type": "factual_lookup", "confidence": 0.9, '
+                '"rationale": "test"}'
+            )
+        )
+        planner = QueryPlanner(settings=cache_size_settings, chat_provider=provider)
+        # Fill the cache with queries 0..127 (128 = CACHE_MAXSIZE).
+        for i in range(128):
+            await planner.classify_query(f"query {i}")
+        # Insert one more to trigger eviction of the oldest (query 0).
+        await planner.classify_query("query evictor")
+        provider.response_json = (
+            '{"type": "comparison", "confidence": 0.9, "rationale": "test"}'
+        )
+        plan = await planner.classify_query("query 0")
+        # Cache miss means LLM was called again — classified_type from LLM.
+        assert plan.classified_type == QueryType.COMPARISON
+        assert plan.classification_source == "llm"
+
 
 class TestQueryPlannerConfidence:
     """Confidence threshold tests."""
@@ -432,6 +461,67 @@ class TestQueryPlannerConfidence:
             explicit_type=QueryType.COMPARISON,
         )
         assert plan.confidence == 1.0
+
+    async def test_confidence_in_mid_range_escalates_depth(
+        self, query_id: uuid.UUID
+    ) -> None:
+        """Mid-range confidence escalates retrieval depth to 'deep'."""
+        mid_range_settings = Settings(
+            database_url="postgresql+asyncpg://u:p@localhost:5432/test",
+            planner_confidence_minimum=0.3,
+            planner_confidence_low=0.5,
+            planner_confidence_high=0.8,
+        )
+        json_ = (
+            '{"type": "factual_lookup", "confidence": 0.6,'
+            ' "rationale": "mid confidence"}'
+        )
+        provider = _FakeLLMProvider(response_json=json_)
+        planner = QueryPlanner(settings=mid_range_settings, chat_provider=provider)
+        plan = await planner.classify_query("Some query", query_id=query_id)
+        assert plan.retrieval_depth == "deep"
+        assert plan.seed_count >= 3
+        assert "escalated" in plan.termination_condition
+
+    async def test_confidence_above_high_does_not_escalate(
+        self, query_id: uuid.UUID
+    ) -> None:
+        """Confidence >= high threshold does not escalate."""
+        above_high_settings = Settings(
+            database_url="postgresql+asyncpg://u:p@localhost:5432/test",
+            planner_confidence_minimum=0.3,
+            planner_confidence_low=0.5,
+            planner_confidence_high=0.8,
+        )
+        json_ = (
+            '{"type": "factual_lookup", "confidence": 0.9,'
+            ' "rationale": "high confidence"}'
+        )
+        provider = _FakeLLMProvider(response_json=json_)
+        planner = QueryPlanner(settings=above_high_settings, chat_provider=provider)
+        plan = await planner.classify_query("Some query", query_id=query_id)
+        assert plan.retrieval_depth == "shallow"
+        assert plan.seed_count == 1
+
+    async def test_confidence_below_low_does_not_escalate(
+        self, query_id: uuid.UUID
+    ) -> None:
+        """Confidence below low threshold does not escalate (but passes minimum)."""
+        below_low_settings = Settings(
+            database_url="postgresql+asyncpg://u:p@localhost:5432/test",
+            planner_confidence_minimum=0.3,
+            planner_confidence_low=0.5,
+            planner_confidence_high=0.8,
+        )
+        json_ = (
+            '{"type": "factual_lookup", "confidence": 0.4,'
+            ' "rationale": "low confidence"}'
+        )
+        provider = _FakeLLMProvider(response_json=json_)
+        planner = QueryPlanner(settings=below_low_settings, chat_provider=provider)
+        plan = await planner.classify_query("Some query", query_id=query_id)
+        assert plan.retrieval_depth == "shallow"
+        assert plan.seed_count == 1
 
 
 class TestQueryPlannerPlanProperties:

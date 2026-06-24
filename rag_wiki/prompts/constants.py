@@ -32,9 +32,7 @@ Classify the following user query into exactly one of these types:
 - summarization: "Summarize X", "Give me an overview of Y"
 - comparison: "Compare X and Y", "Differences between A and B"
 
-Respond with JSON: {"type": "...", "confidence": 0.0-1.0, "rationale": "..."}
-
-Query: {query}"""
+Respond with JSON: {"type": "...", "confidence": 0.0-1.0, "rationale": "..."}"""
 
 QUERY_SYSTEM_PROMPT = (
     "You are a helpful research assistant. Answer the user's question "
