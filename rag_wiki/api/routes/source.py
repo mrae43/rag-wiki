@@ -29,6 +29,7 @@ from rag_wiki.api.schemas import PaginatedListEnvelope
 from rag_wiki.db.models import Chunk, ProcessingStatus, Source
 from rag_wiki.exceptions import DatabaseError
 from rag_wiki.jobs import enqueue
+from rag_wiki.planner.ingest import IngestPlanner
 from rag_wiki.settings import Settings, get_settings
 
 logger = structlog.get_logger(__name__)
@@ -175,6 +176,15 @@ async def create_source(
         raise BadRequestError("Empty files are not allowed")
 
     file_type = file.content_type or "application/octet-stream"
+
+    planner = IngestPlanner(settings)
+    source_plan = planner.create_source_plan(
+        source_id=source_id,
+        file_path=str(file_path),
+        source_metadata=metadata_dict,
+        original_filename=file.filename,
+    )
+
     try:
         source = Source(
             id=source_id,
@@ -184,6 +194,7 @@ async def create_source(
             file_size=total_size,
             status=ProcessingStatus.PENDING,
             metadata_=metadata_dict,
+            source_plan=source_plan.model_dump(mode="json"),
         )
         db.add(source)
         await db.flush()

@@ -31,8 +31,12 @@ from rag_wiki.planner.exceptions import (
 from rag_wiki.planner.exceptions import (
     PlannerError as PlannerError,
 )
+from rag_wiki.planner.ingest import (
+    IngestPlanner as IngestPlanner,
+)
 
 __all__ = [
+    "IngestPlanner",
     "PDFParserMode",
     "ParserType",
     "PlannerClassificationError",

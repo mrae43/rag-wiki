@@ -49,6 +49,8 @@ async def test_upload_source_creates_source_and_job(
     assert source.file_size == len(content)
     assert source.status == ProcessingStatus.PENDING
     assert source.metadata_ == {"category": "test"}
+    assert source.source_plan is not None
+    assert source.source_plan["selected_parser"] == "simple"
 
     upload_path = Path(source.file_path)
     assert upload_path.exists()

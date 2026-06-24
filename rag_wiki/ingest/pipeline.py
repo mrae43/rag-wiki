@@ -24,6 +24,8 @@ from rag_wiki.graph import extract_entities, resolve_entities
 from rag_wiki.ingest.parser import parse_document
 from rag_wiki.ingest.schemas import ImageChunk, ParsedChunk
 from rag_wiki.jobs import enqueue
+from rag_wiki.planner.base import SourcePlan
+from rag_wiki.planner.ingest import IngestPlanner
 from rag_wiki.providers.base import ChatProvider, EmbeddingProvider
 from rag_wiki.settings import get_settings
 from rag_wiki.wiki.synthesis import (
@@ -106,15 +108,27 @@ async def run_ingest_pipeline(
     )
 
     # 2. Parse (CPU-bound, offload to thread).
+    if source.source_plan is None:
+        planner = IngestPlanner(get_settings())
+        fallback_plan = planner.create_source_plan(
+            source_id=source.id,
+            file_path=file_path,
+            source_metadata=source.metadata_,
+        )
+        source.source_plan = fallback_plan.model_dump(mode="json")
+        await db.flush()
+
+    source_plan = SourcePlan(**source.source_plan)
+
     try:
         parsed_chunks: list[ParsedChunk] = await asyncio.to_thread(
-            parse_document, file_path, source_meta
+            parse_document, file_path, source_plan
         )
     except Exception as exc:
         source.status = ProcessingStatus.FAILED
         raise IngestError(
             f"Failed to parse document: source_id={source.id!r} "
-            f"path={file_path!r} parser=lightweight"
+            f"path={file_path!r} parser={source_plan.selected_parser}"
         ) from exc
 
     # 3. Create Chunk rows.
