@@ -5,12 +5,15 @@ End-to-end integration tests for the retrieval pipeline.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.db.models.graph import Entity, PublishedStatus, Relation
 from rag_wiki.db.models.source import Chunk, ChunkEntity, ProcessingStatus, Source
 from rag_wiki.db.models.wiki import WikiPage
+from rag_wiki.planner.base import QueryPlan, QueryType
 from rag_wiki.providers.base import EmbeddingProvider
 from rag_wiki.retrieval import retrieve
 from rag_wiki.settings import get_settings
@@ -169,3 +172,64 @@ async def test_retrieve_no_matches_returns_empty_result(
     assert result.seed_chunks == []
     assert result.hop1_chunks == []
     assert result.total_tokens_used <= 3600
+
+
+@pytest.mark.asyncio
+async def test_retrieve_comparison_merges_results(
+    db: AsyncSession,
+    mock_embedding_provider: EmbeddingProvider,
+) -> None:
+    """Comparison query path merges per-entity retrievals into a single result."""
+    dims = get_settings().embedding_dimensions
+    src = await _make_source(db)
+
+    entity_a = await _make_entity(db, "Alpha", _embedding(dims, 1.0))
+    entity_b = await _make_entity(db, "Beta", _embedding(dims, 0.5))
+
+    rel_a = Relation(
+        source_entity=entity_a,
+        target_entity=entity_b,
+        relation_type="competes_with",
+        chunk=await _make_chunk(db, src, "rel ab"),
+        status=PublishedStatus.PUBLISHED,
+        confidence_tag="INFERRED",
+    )
+    db.add(rel_a)
+    await db.commit()
+
+    chunk_a = await _make_chunk(db, src, "alpha text", _embedding(dims, 1.0))
+    chunk_b = await _make_chunk(db, src, "beta text", _embedding(dims, 0.5))
+    db.add(ChunkEntity(chunk_id=chunk_a.id, entity_id=entity_a.id))
+    db.add(ChunkEntity(chunk_id=chunk_b.id, entity_id=entity_b.id))
+    await db.commit()
+
+    query_plan = QueryPlan(
+        query_id=uuid.uuid4(),
+        raw_query="compare Alpha and Beta",
+        classified_type=QueryType.COMPARISON,
+        retrieval_depth="shallow",
+        seed_count=2,
+        termination_condition="all entities resolved",
+        confidence=0.9,
+        classification_source="llm",
+        rationale="comparison query",
+        planner_version="1.0.0",
+    )
+
+    result = await retrieve(
+        query="compare",
+        db=db,
+        embed_provider=mock_embedding_provider,
+        max_context_tokens=3600,
+        seed_entity_ids=[entity_a.id, entity_b.id],
+        query_plan=query_plan,
+    )
+
+    assert len(result.seeds) == 2
+    seed_ids = {s.entity_id for s in result.seeds}
+    assert entity_a.id in seed_ids
+    assert entity_b.id in seed_ids
+
+    all_chunk_ids = {c.chunk_id for c in result.seed_chunks}
+    assert chunk_a.id in all_chunk_ids
+    assert chunk_b.id in all_chunk_ids
