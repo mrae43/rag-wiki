@@ -209,6 +209,7 @@ async def create_query(
             embed_provider=embed_provider,
             max_context_tokens=request.max_context_tokens,
             seed_entity_ids=request.seed_entity_ids,
+            query_plan=query_plan,
         )
     except RetrievalError:
         raise

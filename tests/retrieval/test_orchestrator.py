@@ -10,10 +10,13 @@ is reproducible without calling a real embedding API.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.db.models import Chunk, ChunkEntity, Entity, Relation, Source
+from rag_wiki.planner.base import QueryPlan, QueryType
 from rag_wiki.providers.base import EmbeddingProvider
 from rag_wiki.retrieval.orchestrator import retrieve
 from rag_wiki.settings import get_settings
@@ -190,3 +193,88 @@ async def test_retrieve_returns_empty_result_when_no_seeds(
     assert result.subgraph == []
     assert result.seed_chunks == []
     assert result.hop1_chunks == []
+
+
+async def test_retrieve_comparison_dispatch_uses_per_entity_seeds(
+    db: AsyncSession,
+    embed_provider: EmbeddingProvider,
+) -> None:
+    """retrieve() uses per-entity retrieval when query_plan indicates comparison."""
+    entity_a, entity_b, _entity_c = await _seed_graph(db)
+
+    query_plan = QueryPlan(
+        query_id=uuid.uuid4(),
+        raw_query="compare Retrieval Orchestrator and Graph Traversal",
+        classified_type=QueryType.COMPARISON,
+        retrieval_depth="shallow",
+        seed_count=2,
+        termination_condition="all entities resolved",
+        confidence=0.9,
+        classification_source="llm",
+        rationale="comparison query",
+        planner_version="1.0.0",
+    )
+
+    result = await retrieve(
+        query="compare",
+        db=db,
+        embed_provider=embed_provider,
+        seed_entity_ids=[entity_a.id, entity_b.id],
+        query_plan=query_plan,
+    )
+
+    assert len(result.seeds) == 2
+    seed_ids = {s.entity_id for s in result.seeds}
+    assert entity_a.id in seed_ids
+    assert entity_b.id in seed_ids
+
+
+async def test_retrieve_comparison_without_explicit_seeds(
+    db: AsyncSession,
+    embed_provider: EmbeddingProvider,
+) -> None:
+    """Comparison without explicit seeds uses vector search."""
+    entity_a, _entity_b, _entity_c = await _seed_graph(db)
+
+    query_plan = QueryPlan(
+        query_id=uuid.uuid4(),
+        raw_query="compare Retrieval Orchestrator and Graph Traversal",
+        classified_type=QueryType.COMPARISON,
+        retrieval_depth="shallow",
+        seed_count=2,
+        termination_condition="all entities resolved",
+        confidence=0.9,
+        classification_source="llm",
+        rationale="comparison query",
+        planner_version="1.0.0",
+    )
+
+    result = await retrieve(
+        query="Retrieval Orchestrator",
+        db=db,
+        embed_provider=embed_provider,
+        query_plan=query_plan,
+    )
+
+    assert len(result.seeds) >= 1
+    assert entity_a.id in {s.entity_id for s in result.seeds}
+
+
+async def test_retrieve_no_comparison_dispatch_without_query_plan(
+    db: AsyncSession,
+    embed_provider: EmbeddingProvider,
+) -> None:
+    """retrieve() uses single-pass pipeline when query_plan is None."""
+    entity_a, entity_b, _entity_c = await _seed_graph(db)
+
+    result = await retrieve(
+        query="compare",
+        db=db,
+        embed_provider=embed_provider,
+        seed_entity_ids=[entity_a.id, entity_b.id],
+    )
+
+    assert len(result.seeds) == 2
+    seed_ids = {s.entity_id for s in result.seeds}
+    assert entity_a.id in seed_ids
+    assert entity_b.id in seed_ids
