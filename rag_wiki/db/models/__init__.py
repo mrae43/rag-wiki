@@ -31,6 +31,9 @@ from rag_wiki.db.models.index import (
     PublishedStatus as PublishedStatus,
 )
 from rag_wiki.db.models.index import (
+    QueryPlanRecord as QueryPlanRecord,
+)
+from rag_wiki.db.models.index import (
     Relation as Relation,
 )
 from rag_wiki.db.models.index import (
