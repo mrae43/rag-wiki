@@ -3,11 +3,13 @@ tests/api/routes/test_query
 --------------------------
 Tests for the ``POST /api/v1/queries`` endpoint.
 
-Covers answer generation, context-only retrieval, validation errors, and
-seed-entity bypass of vector search.
+Covers answer generation, context-only retrieval, validation errors,
+seed-entity bypass of vector search, and query planner integration.
 """
 
 from __future__ import annotations
+
+import uuid
 
 import pytest
 from httpx import AsyncClient
@@ -125,7 +127,7 @@ async def test_query_generate_answer_false_omits_answer(
         response = await api_client.post(
             "/api/v1/queries",
             json={
-                "query": "Tell me about Context Only Subject",
+                "query": "What is Context Only Subject?",
                 "generate_answer": False,
                 "seed_entity_ids": [str(entity.id)],
             },
@@ -137,7 +139,7 @@ async def test_query_generate_answer_false_omits_answer(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["query"] == "Tell me about Context Only Subject"
+    assert body["query"] == "What is Context Only Subject?"
     assert body["answer"] is None
     assert body["retrieval"] is not None
 
@@ -173,7 +175,7 @@ async def test_query_seed_entity_ids_bypass_vector_search(
         response = await api_client.post(
             "/api/v1/queries",
             json={
-                "query": "irrelevant",
+                "query": "What is Seed Bypass Subject?",
                 "generate_answer": False,
                 "seed_entity_ids": [str(entity.id)],
             },
@@ -188,3 +190,135 @@ async def test_query_seed_entity_ids_bypass_vector_search(
     assert len(body["retrieval"]["seeds"]) == 1
     assert body["retrieval"]["seeds"][0]["entity_id"] == str(entity.id)
     assert body["retrieval"]["seeds"][0]["similarity_score"] == 1.0
+
+
+async def test_query_includes_plan_in_response(
+    api_client: AsyncClient,
+    db: AsyncSession,
+    deterministic_embed_provider: EmbeddingProvider,
+) -> None:
+    """POST /queries returns the query plan from the planner."""
+    entity = await _seed_entity(db, "Plan Test Subject")
+    api_client.app.dependency_overrides[  # type: ignore[attr-defined]
+        get_embedding_provider
+    ] = lambda: deterministic_embed_provider
+
+    try:
+        response = await api_client.post(
+            "/api/v1/queries",
+            json={
+                "query": "What is Plan Test Subject?",
+                "seed_entity_ids": [str(entity.id)],
+            },
+        )
+    finally:
+        api_client.app.dependency_overrides.pop(  # type: ignore[attr-defined]
+            get_embedding_provider, None
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "plan" in body
+    assert body["plan"]["classified_type"] == "factual_lookup"
+    assert body["plan"]["confidence"] == 0.9
+    assert body["plan"]["classification_source"] == "rule"
+    assert body["plan"]["raw_query"] == "What is Plan Test Subject?"
+
+
+async def test_query_plan_persisted_to_db(
+    api_client: AsyncClient,
+    db: AsyncSession,
+    deterministic_embed_provider: EmbeddingProvider,
+) -> None:
+    """Query plan is persisted to the query_plans table."""
+    from rag_wiki.db.models import QueryPlanRecord
+
+    entity = await _seed_entity(db, "Persist Test")
+    api_client.app.dependency_overrides[  # type: ignore[attr-defined]
+        get_embedding_provider
+    ] = lambda: deterministic_embed_provider
+
+    try:
+        response = await api_client.post(
+            "/api/v1/queries",
+            json={
+                "query": "What is Persist Test?",
+                "seed_entity_ids": [str(entity.id)],
+            },
+        )
+    finally:
+        api_client.app.dependency_overrides.pop(  # type: ignore[attr-defined]
+            get_embedding_provider, None
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    plan_id = body["plan"]["query_id"]
+
+    result = await db.get(QueryPlanRecord, uuid.UUID(plan_id))
+    assert result is not None
+    assert result.classified_type == "factual_lookup"
+    assert result.raw_query == "What is Persist Test?"
+    assert result.confidence == 0.9
+
+
+async def test_query_low_confidence_returns_400(
+    api_client: AsyncClient,
+    db: AsyncSession,
+    deterministic_embed_provider: EmbeddingProvider,
+) -> None:
+    """POST /queries with low-confidence query returns 400 when no explicit type."""
+    entity = await _seed_entity(db, "Low Confidence Subject")
+    api_client.app.dependency_overrides[  # type: ignore[attr-defined]
+        get_embedding_provider
+    ] = lambda: deterministic_embed_provider
+
+    try:
+        response = await api_client.post(
+            "/api/v1/queries",
+            json={
+                "query": "xylophone zebra",
+                "seed_entity_ids": [str(entity.id)],
+            },
+        )
+    finally:
+        api_client.app.dependency_overrides.pop(  # type: ignore[attr-defined]
+            get_embedding_provider, None
+        )
+
+    assert response.status_code == 400
+    body = response.json()
+    assert "detail" in body
+    assert "Confidence" in body["detail"]
+
+
+async def test_query_explicit_type_bypasses_confidence_check(
+    api_client: AsyncClient,
+    db: AsyncSession,
+    deterministic_embed_provider: EmbeddingProvider,
+) -> None:
+    """POST /queries with explicit query_type succeeds for low-confidence queries."""
+    entity = await _seed_entity(db, "Explicit Type Subject")
+    api_client.app.dependency_overrides[  # type: ignore[attr-defined]
+        get_embedding_provider
+    ] = lambda: deterministic_embed_provider
+
+    try:
+        response = await api_client.post(
+            "/api/v1/queries",
+            json={
+                "query": "xylophone zebra",
+                "query_type": "factual_lookup",
+                "seed_entity_ids": [str(entity.id)],
+            },
+        )
+    finally:
+        api_client.app.dependency_overrides.pop(  # type: ignore[attr-defined]
+            get_embedding_provider, None
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "plan" in body
+    assert body["plan"]["classification_source"] == "explicit"
+    assert body["plan"]["classified_type"] == "factual_lookup"
