@@ -114,6 +114,7 @@ async def run_ingest_pipeline(
             source_id=source.id,
             file_path=file_path,
             source_metadata=source.metadata_,
+            original_filename=source.file_name,
         )
         source.source_plan = fallback_plan.model_dump(mode="json")
         await db.flush()
