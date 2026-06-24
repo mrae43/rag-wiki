@@ -105,6 +105,8 @@ class OpenAIProvider(ChatProvider, EmbeddingProvider):
             kwargs["max_tokens"] = request.max_tokens
         if request.temperature is not None:
             kwargs["temperature"] = request.temperature
+        if request.timeout_ms is not None:
+            kwargs["timeout"] = request.timeout_ms / 1000.0
 
         try:
             raw = await self._client.chat.completions.create(**kwargs)

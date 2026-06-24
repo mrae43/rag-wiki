@@ -47,6 +47,7 @@ class CompletionRequest(BaseModel):
     model: str
     max_tokens: int | None = None
     temperature: float | None = None
+    timeout_ms: int | None = None
     tools: list[ToolDefinition] | None = None
 
 
