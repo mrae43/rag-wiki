@@ -11,15 +11,19 @@ natural-language answer from the retrieved context.
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from rag_wiki.api.dependencies import get_chat_provider, get_db, get_embedding_provider
+from rag_wiki.db.models import QueryPlanRecord
 from rag_wiki.exceptions import RetrievalError
+from rag_wiki.planner import QueryPlanner
+from rag_wiki.planner.base import QueryType
+from rag_wiki.planner.exceptions import PlannerClassificationError
 from rag_wiki.prompts.constants import QUERY_SYSTEM_PROMPT
 from rag_wiki.providers.base import (
     ChatProvider,
@@ -46,6 +50,10 @@ class QueryRequest(BaseModel):
         True,
         description="If true, ask the LLM to synthesize an answer from context.",
     )
+    query_type: QueryType | None = Field(
+        None,
+        description="Explicit query type override. Skips LLM/keyword classification.",
+    )
     seed_entity_ids: list[uuid.UUID] | None = Field(
         None,
         description="Optional entity IDs to use as seeds, bypassing vector search.",
@@ -63,6 +71,10 @@ class QueryResponse(BaseModel):
     query: str
     answer: str | None
     retrieval: RetrievalResult
+    plan: dict[str, Any] | None = Field(
+        None,
+        description="Query plan produced by the query planner.",
+    )
 
 
 def _format_context(retrieval: RetrievalResult) -> str:
@@ -155,6 +167,41 @@ async def create_query(
     """
     logger.info("query_received", query=request.query)
 
+    query_id = uuid.uuid4()
+
+    planner = QueryPlanner(
+        settings=get_settings(),
+        chat_provider=chat_provider,
+    )
+
+    try:
+        query_plan = await planner.classify_query(
+            query=request.query,
+            query_id=query_id,
+            explicit_type=request.query_type,
+        )
+    except PlannerClassificationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    db_plan = QueryPlanRecord(
+        id=query_plan.query_id,
+        raw_query=query_plan.raw_query,
+        classified_type=query_plan.classified_type.value,
+        retrieval_depth=query_plan.retrieval_depth,
+        seed_count=query_plan.seed_count,
+        termination_condition=query_plan.termination_condition,
+        confidence=query_plan.confidence,
+        classification_source=query_plan.classification_source,
+        model_used=query_plan.model_used,
+        rationale=query_plan.rationale,
+        planner_version=query_plan.planner_version,
+    )
+    db.add(db_plan)
+    await db.flush()
+
     try:
         retrieval = await retrieve(
             query=request.query,
@@ -194,6 +241,7 @@ async def create_query(
             query=request.query,
             answer=answer,
             retrieval=retrieval,
+            plan=query_plan.model_dump(mode="json"),
         )
     except Exception as exc:
         logger.error(
