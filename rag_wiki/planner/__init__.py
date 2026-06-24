@@ -34,6 +34,9 @@ from rag_wiki.planner.exceptions import (
 from rag_wiki.planner.ingest import (
     IngestPlanner as IngestPlanner,
 )
+from rag_wiki.planner.query import (
+    QueryPlanner as QueryPlanner,
+)
 
 __all__ = [
     "IngestPlanner",
@@ -42,6 +45,7 @@ __all__ = [
     "PlannerClassificationError",
     "PlannerError",
     "QueryPlan",
+    "QueryPlanner",
     "QueryType",
     "SourcePlan",
 ]
