@@ -25,6 +25,17 @@ Return your result using the extract_entities_and_relations tool."""
 
 CAPTION_PROMPT = "Describe this image."
 
+QUERY_CLASSIFICATION_PROMPT = """\
+Classify the following user query into exactly one of these types:
+- factual_lookup: "What is X?", "Define Y", "Who is Z?"
+- relationship_query: "How does X relate to Y?", "What connects X and Z?"
+- summarization: "Summarize X", "Give me an overview of Y"
+- comparison: "Compare X and Y", "Differences between A and B"
+
+Respond with JSON: {"type": "...", "confidence": 0.0-1.0, "rationale": "..."}
+
+Query: {query}"""
+
 QUERY_SYSTEM_PROMPT = (
     "You are a helpful research assistant. Answer the user's question "
     "using only the retrieved context below. If the question is ambiguous "
