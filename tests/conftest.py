@@ -12,7 +12,8 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
+from typing import BinaryIO
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -20,6 +21,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from rag_wiki.db.base import Base
+from rag_wiki.exceptions import StorageError
 from rag_wiki.main import app as fastapi_app
 from rag_wiki.providers.base import (
     ChatProvider,
@@ -162,6 +164,46 @@ class FakeEmbeddingProvider:
         return [[0.0] * dims for _ in texts]
 
 
+class FakeStorageProvider:
+    """
+    Test double that satisfies the StorageProvider protocol.
+
+    Stores files in an in-memory dict keyed by storage key. Does not
+    touch the filesystem. Useful for unit tests that need a storage
+    provider without I/O side effects.
+    """
+
+    def __init__(self) -> None:
+        self._store: dict[str, bytes] = {}
+
+    async def upload(self, source_id: str, file: BinaryIO, filename: str) -> str:
+        """Read the file into memory and return the storage key."""
+        key = f"sources/{source_id}"
+        self._store[key] = file.read()
+        return key
+
+    async def download(self, key: str) -> AsyncIterator[bytes]:
+        """Yield the stored bytes for the given key."""
+        data = self._store.get(key)
+        if data is None:
+            raise StorageError(
+                f"FakeStorageProvider.download failed: key={key!r} not found"
+            )
+        yield data
+
+    async def delete(self, key: str) -> None:
+        """Remove the stored entry for the given key."""
+        if key not in self._store:
+            raise StorageError(
+                f"FakeStorageProvider.delete failed: key={key!r} not found"
+            )
+        del self._store[key]
+
+    async def exists(self, key: str) -> bool:
+        """Return whether the key exists in the in-memory store."""
+        return key in self._store
+
+
 @pytest.fixture
 def mock_chat_provider() -> ChatProvider:
     """Return a deterministic chat provider for unit tests."""
@@ -172,6 +214,12 @@ def mock_chat_provider() -> ChatProvider:
 def mock_embedding_provider() -> EmbeddingProvider:
     """Return a deterministic embedding provider for unit tests."""
     return FakeEmbeddingProvider()
+
+
+@pytest.fixture
+def mock_storage_provider() -> FakeStorageProvider:
+    """Return an in-memory storage provider for unit tests."""
+    return FakeStorageProvider()
 
 
 @pytest.fixture
