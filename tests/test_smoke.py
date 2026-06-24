@@ -33,7 +33,10 @@ def test_settings_defaults() -> None:
     fields = Settings.model_fields
     assert fields["llm_provider"].default == "openai"
     assert fields["embedding_dimensions"].default == 3072
-    assert fields["parser"].default == "lightweight"
+    assert fields["planner_version"].default == "1.0.0"
+    assert fields["planner_confidence_high"].default == 0.8
+    assert fields["planner_confidence_low"].default == 0.5
+    assert fields["planner_confidence_minimum"].default == 0.5
     assert fields["llm_model_caption"].default == "gpt-4o-mini"
     assert fields["llm_model_extraction"].default == "gpt-4o-mini"
     assert fields["llm_model_resolution"].default == "gpt-4o"
