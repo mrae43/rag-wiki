@@ -48,3 +48,7 @@ class RetrievalError(RagWikiError):
     Base class for hierarchy completeness; the pipeline returns a valid
     RetrievalResult even when no seeds are found rather than raising.
     """
+
+
+class StorageError(RagWikiError):
+    """Raised when a StorageProvider operation fails."""

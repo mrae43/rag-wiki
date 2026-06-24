@@ -76,6 +76,14 @@ class Settings(BaseSettings):
     upload_max_file_size_bytes: int = 104_857_600
     cors_origins: str = ""
 
+    # Storage provider
+    storage_provider: Literal["local", "s3"] = "local"
+    s3_bucket: str = "rag-wiki"
+    s3_endpoint_url: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""
+    s3_region: str = "us-east-1"
+
     # Logging
     log_level: str = "INFO"
     log_format: Literal["json", "console"] = "console"
