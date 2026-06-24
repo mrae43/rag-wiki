@@ -96,11 +96,18 @@ class FakeChatProvider:
 
     Supports per-tool canned responses via ``response_map`` so that tests
     for extraction and resolution can return different JSON payloads.
+    Supports ``response_json`` for non-tool calls to simulate LLM JSON
+    responses (e.g. query classification).
     """
 
-    def __init__(self, response_map: dict[str, str] | None = None) -> None:
-        """Init with optional response map mapping tool names to canned JSON."""
+    def __init__(
+        self,
+        response_map: dict[str, str] | None = None,
+        response_json: str | None = None,
+    ) -> None:
+        """Init with optional response map and optional JSON response."""
         self.response_map = response_map or {}
+        self.response_json = response_json
 
     async def complete(self, request: CompletionRequest) -> CompletionResponse:
         """Return a fake response, using the response map if a tool name matches."""
@@ -118,8 +125,13 @@ class FakeChatProvider:
                             )
                         ],
                     )
+        content = (
+            self.response_json
+            if self.response_json is not None
+            else f"fake-completion-for-{request.model}"
+        )
         return CompletionResponse(
-            content=f"fake-completion-for-{request.model}",
+            content=content,
             tool_calls=[
                 ToolCall(
                     id="fake-tool-1",

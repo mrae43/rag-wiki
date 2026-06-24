@@ -15,10 +15,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rag_wiki.api.dependencies import get_embedding_provider
+from rag_wiki.api.dependencies import get_chat_provider, get_embedding_provider
 from rag_wiki.db.models import Entity, ProcessingStatus, Source
 from rag_wiki.providers.base import EmbeddingProvider
 from rag_wiki.settings import get_settings
+from tests.conftest import FakeChatProvider
 
 
 class _DeterministicEmbeddingProvider:
@@ -322,3 +323,42 @@ async def test_query_explicit_type_bypasses_confidence_check(
     assert "plan" in body
     assert body["plan"]["classification_source"] == "explicit"
     assert body["plan"]["classified_type"] == "factual_lookup"
+
+
+async def test_query_llm_classification_path(
+    api_client: AsyncClient,
+    db: AsyncSession,
+    deterministic_embed_provider: EmbeddingProvider,
+) -> None:
+    """POST /queries uses LLM classification when the provider returns valid JSON."""
+    entity = await _seed_entity(db, "LLM Classify Subject")
+    llm_provider = FakeChatProvider(
+        response_json=(
+            '{"type": "comparison", "confidence": 0.9, '
+            '"rationale": "compare keywords detected"}'
+        )
+    )
+    api_client.app.dependency_overrides[get_chat_provider] = lambda: llm_provider  # type: ignore[attr-defined]
+    api_client.app.dependency_overrides[  # type: ignore[attr-defined]
+        get_embedding_provider
+    ] = lambda: deterministic_embed_provider
+
+    try:
+        response = await api_client.post(
+            "/api/v1/queries",
+            json={
+                "query": "Compare X and Y",
+                "seed_entity_ids": [str(entity.id)],
+            },
+        )
+    finally:
+        api_client.app.dependency_overrides.pop(get_chat_provider, None)  # type: ignore[attr-defined]
+        api_client.app.dependency_overrides.pop(  # type: ignore[attr-defined]
+            get_embedding_provider, None
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan"]["classified_type"] == "comparison"
+    assert body["plan"]["confidence"] == 0.9
+    assert body["plan"]["classification_source"] == "llm"
