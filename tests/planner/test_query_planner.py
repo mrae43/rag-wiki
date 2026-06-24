@@ -387,8 +387,7 @@ class TestQueryPlannerCache:
         )
         provider = _FakeLLMProvider(
             response_json=(
-                '{"type": "factual_lookup", "confidence": 0.9, '
-                '"rationale": "test"}'
+                '{"type": "factual_lookup", "confidence": 0.9, "rationale": "test"}'
             )
         )
         planner = QueryPlanner(settings=cache_size_settings, chat_provider=provider)
