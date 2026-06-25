@@ -256,7 +256,7 @@ async def test_wiki_pages_entity_id_unique(engine: AsyncEngine) -> None:
 async def test_create_source_and_chunk(db: AsyncSession) -> None:
     """Create a Source and Chunk via ORM and verify they persist correctly."""
     source = Source(
-        file_path="/tmp/test.pdf",
+        storage_key="/tmp/test.pdf",
         file_name="test.pdf",
         file_type="application/pdf",
         file_size=1234,
@@ -285,7 +285,7 @@ async def test_create_source_and_chunk(db: AsyncSession) -> None:
 async def test_create_entity_and_relation(db: AsyncSession) -> None:
     """Create two Entities and a Relation between them via ORM."""
     source = Source(
-        file_path="/tmp/test.pdf",
+        storage_key="/tmp/test.pdf",
         file_name="test.pdf",
         file_type="application/pdf",
         file_size=1234,
@@ -391,7 +391,7 @@ async def test_create_job(db: AsyncSession) -> None:
 async def test_chunk_entity_link(db: AsyncSession) -> None:
     """Create a ChunkEntity join row and verify it round-trips."""
     source = Source(
-        file_path="/tmp/test.pdf",
+        storage_key="/tmp/test.pdf",
         file_name="test.pdf",
         file_type="application/pdf",
         file_size=1234,
