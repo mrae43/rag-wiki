@@ -16,14 +16,19 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import mimetypes
+import uuid
 from pathlib import Path
 
 import structlog
 import typer
 
+from rag_wiki.db.models import ProcessingStatus, Source
 from rag_wiki.db.session import AsyncSessionFactory
 from rag_wiki.exceptions import IngestError
 from rag_wiki.jobs import enqueue
+from rag_wiki.settings import get_settings
+from rag_wiki.storage import get_storage_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -40,14 +45,40 @@ async def _ingest_command(file_path: str) -> None:
     if not path.is_file():
         raise IngestError(f"File not found: {file_path!r}")
 
+    settings = get_settings()
+    storage = get_storage_provider(settings)
+    source_id = uuid.uuid4()
+
+    with open(path, "rb") as f:
+        storage_key = await storage.upload(str(source_id), f, path.name)
+
+    file_type, _ = mimetypes.guess_type(str(path))
+    file_type = file_type or "application/octet-stream"
+    file_size = path.stat().st_size
+
     async with AsyncSessionFactory() as db:
+        source = Source(
+            id=source_id,
+            storage_key=storage_key,
+            file_name=path.name,
+            file_type=file_type,
+            file_size=file_size,
+            status=ProcessingStatus.PENDING,
+        )
+        db.add(source)
+        await db.flush()
+
         job = await enqueue(
             db,
             "ingest_document",
-            payload={"file_path": str(path.resolve())},
+            payload={"storage_key": storage_key, "source_id": str(source_id)},
         )
         await db.commit()
-        logger.info("job enqueued", job_id=str(job.id), file_path=str(path.resolve()))
+        logger.info(
+            "job enqueued",
+            job_id=str(job.id),
+            storage_key=storage_key,
+        )
         typer.echo(f"Job {job.id} enqueued")
 
 
