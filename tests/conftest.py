@@ -12,7 +12,10 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import BinaryIO
 
 import pytest
@@ -202,6 +205,22 @@ class FakeStorageProvider:
     async def exists(self, key: str) -> bool:
         """Return whether the key exists in the in-memory store."""
         return key in self._store
+
+    @asynccontextmanager
+    async def with_temp_file(self, key: str) -> AsyncIterator[Path]:
+        """Write in-memory content to a temp file, yield it, clean up."""
+        data = self._store.get(key)
+        if data is None:
+            raise StorageError(
+                f"FakeStorageProvider.with_temp_file: key={key!r} not found"
+            )
+        tmp = Path(tempfile.mktemp(suffix=".bin"))
+        tmp.write_bytes(data)
+        try:
+            yield tmp
+        finally:
+            if tmp.exists():
+                tmp.unlink()
 
 
 @pytest.fixture
