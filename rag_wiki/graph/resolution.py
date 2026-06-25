@@ -239,9 +239,9 @@ async def resolve_entities(
                 )
                 request = CompletionRequest(
                     system=prompt,
-                    messages=[],
                     model=settings.llm_model_resolution,
                     tools=[_MERGE_DECISION_TOOL],
+                    tool_choice="merge_decision",
                 )
                 response = await chat_provider.complete(request)
 
