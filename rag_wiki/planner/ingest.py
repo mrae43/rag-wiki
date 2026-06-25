@@ -64,17 +64,24 @@ class IngestPlanner:
         file_path: str,
         source_metadata: dict[str, object] | None = None,
         original_filename: str | None = None,
+        file_size: int | None = None,
     ) -> SourcePlan:
         """Produce a ``SourcePlan`` for the given source document.
 
         Args:
             source_id: UUID of the source (must exist or be about to exist).
-            file_path: Absolute path to the document on disk.
+            file_path: Absolute path to the document on disk, or storage key
+                when called from the API (where the original file is in the
+                storage provider, not on the local filesystem).
             source_metadata: Optional metadata that may contain a ``"parser"``
                 key for explicit parser override.
             original_filename: Original upload filename, used for MIME
                 guessing when ``file_path`` has no recognizable extension
                 (e.g. UUID-based storage paths).
+            file_size: Optional file size in bytes. When provided, the planner
+                uses it for density classification instead of calling
+                ``os.path.getsize()`` (avoiding a ``FileNotFoundError`` when
+                ``file_path`` is an opaque storage key rather than a real path).
 
         Returns:
             A fully populated ``SourcePlan`` with confidence 1.0.
@@ -85,7 +92,9 @@ class IngestPlanner:
         if explicit_override is not None and isinstance(explicit_override, str):
             return self._from_explicit_override(source_id, explicit_override)
 
-        return self._classify_by_mime(source_id, file_path, original_filename)
+        return self._classify_by_mime(
+            source_id, file_path, original_filename, file_size
+        )
 
     def _from_explicit_override(
         self,
@@ -121,6 +130,7 @@ class IngestPlanner:
         source_id: uuid.UUID,
         file_path: str,
         original_filename: str | None = None,
+        file_size: int | None = None,
     ) -> SourcePlan:
         guess_path = original_filename or file_path
         mime_type, _ = mimetypes.guess_type(guess_path)
@@ -133,7 +143,8 @@ class IngestPlanner:
         if selected_parser == ParserType.PDF:
             pdf_mode = PDFParserMode.STANDARD
 
-        file_size = os.path.getsize(file_path)
+        if file_size is None:
+            file_size = os.path.getsize(file_path)
         density = (
             "large"
             if file_size >= self._settings.planner_density_large_threshold_bytes
