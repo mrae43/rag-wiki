@@ -33,6 +33,7 @@ from rag_wiki.wiki.synthesis import (
     JOB_TYPE_SYNTHESIZE_ENTITY,
     JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
 )
+from tests.conftest import FakeStorageProvider
 from tests.ingest.conftest import (
     _DeterministicEmbeddingProvider,
     drain_synthesis_jobs,
@@ -401,6 +402,7 @@ async def test_ingest_no_synthesis_jobs_on_all_fail(
 async def test_e2e_full_pipeline(
     persistent_db: AsyncSession,
     e2e_client: AsyncClient,
+    storage_provider: FakeStorageProvider,
     single_chunk_txt: str,
 ) -> None:
     """Full end-to-end pipeline: upload → ingest → synthesize → query."""
@@ -425,7 +427,7 @@ async def test_e2e_full_pipeline(
     assert ingest_job.job_type == "ingest_document"
 
     # 3. Run ingestion pipeline.
-    await run_ingest_pipeline(ingest_job, persistent_db, chat, embed)
+    await run_ingest_pipeline(ingest_job, persistent_db, chat, embed, storage_provider)
 
     # 4. Complete the ingest job.
     await complete_job(ingest_job, persistent_db)
@@ -470,6 +472,7 @@ async def test_e2e_full_pipeline(
 async def test_e2e_entity_resolution_across_documents(
     persistent_db: AsyncSession,
     e2e_client: AsyncClient,
+    storage_provider: FakeStorageProvider,
     tmp_path: Path,
 ) -> None:
     """
@@ -496,7 +499,7 @@ async def test_e2e_entity_resolution_across_documents(
         source_id: str = response.json()["id"]
         job = await claim_next(persistent_db, worker_id="test-worker")
         assert job is not None
-        await run_ingest_pipeline(job, persistent_db, chat, embed)
+        await run_ingest_pipeline(job, persistent_db, chat, embed, storage_provider)
         await complete_job(job, persistent_db)
         await persistent_db.commit()
         return source_id

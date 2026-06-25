@@ -229,7 +229,7 @@ async def test_build_entity_context_create_mode(
 ) -> None:
     """Context contains expected keys when creating a new page."""
     source = Source(
-        file_path="/tmp/test.txt",
+        storage_key="/tmp/test.txt",
         file_name="test.txt",
         file_type="text/plain",
         file_size=100,
@@ -297,7 +297,7 @@ async def test_build_entity_context_truncates_existing_page(
 ) -> None:
     """An existing page is head-truncated to the Tier-2 budget."""
     source = Source(
-        file_path="/tmp/test.txt",
+        storage_key="/tmp/test.txt",
         file_name="test.txt",
         file_type="text/plain",
         file_size=100,
@@ -372,7 +372,7 @@ async def test_build_source_summary_context_returns_keys(
 ) -> None:
     """Source summary context contains all expected template keys."""
     source = Source(
-        file_path="/tmp/doc.txt",
+        storage_key="/tmp/doc.txt",
         file_name="doc.txt",
         file_type="text/plain",
         file_size=50,

@@ -23,7 +23,12 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-from rag_wiki.api.dependencies import get_chat_provider, get_db, get_embedding_provider
+from rag_wiki.api.dependencies import (
+    get_chat_provider,
+    get_db,
+    get_embedding_provider,
+    get_storage_provider,
+)
 from rag_wiki.db.base import Base
 from rag_wiki.db.models import (
     Chunk,
@@ -73,6 +78,7 @@ async def api_client(
     db: AsyncSession,
     mock_chat_provider: object,
     mock_embedding_provider: object,
+    mock_storage_provider: object,
     tmp_path: Path,
 ) -> AsyncGenerator[AsyncClient, None]:
     """Return an httpx.AsyncClient for a test app with dependencies overridden."""
@@ -90,6 +96,7 @@ async def api_client(
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_chat_provider] = lambda: mock_chat_provider
     app.dependency_overrides[get_embedding_provider] = lambda: mock_embedding_provider
+    app.dependency_overrides[get_storage_provider] = lambda: mock_storage_provider
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -102,7 +109,7 @@ async def api_client(
 async def seeded_source(db: AsyncSession) -> Source:
     """A source with two processed text chunks."""
     source = Source(
-        file_path="/tmp/seeded.txt",
+        storage_key="/tmp/seeded.txt",
         file_name="seeded.txt",
         file_type="text/plain",
         file_size=12,

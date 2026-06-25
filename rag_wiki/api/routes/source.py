@@ -13,24 +13,23 @@ import contextlib
 import json
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Annotated, Any
 
-import aiofiles
 import structlog
 from fastapi import APIRouter, Depends, Form, Request, UploadFile, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rag_wiki.api.dependencies import get_db
+from rag_wiki.api.dependencies import get_db, get_storage_provider
 from rag_wiki.api.exceptions import BadRequestError, NotFoundError, PayloadTooLargeError
 from rag_wiki.api.schemas import PaginatedListEnvelope
 from rag_wiki.db.models import Chunk, ProcessingStatus, Source
-from rag_wiki.exceptions import DatabaseError
+from rag_wiki.exceptions import DatabaseError, StorageError
 from rag_wiki.jobs import enqueue
 from rag_wiki.planner.ingest import IngestPlanner
 from rag_wiki.settings import Settings, get_settings
+from rag_wiki.storage.base import StorageProvider
 
 logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/sources", tags=["sources"])
@@ -110,6 +109,7 @@ async def create_source(
     file: UploadFile,
     db: Annotated[AsyncSession, Depends(get_db)],
     settings: Annotated[Settings, Depends(get_settings)],
+    storage_provider: Annotated[StorageProvider, Depends(get_storage_provider)],
     metadata: Annotated[str | None, Form()] = None,
 ) -> SourceResponse:
     """Upload a document and enqueue an async ingestion job.
@@ -119,6 +119,7 @@ async def create_source(
         file: The multipart file upload.
         db: Async SQLAlchemy session (committed by dependency on success).
         settings: Application settings.
+        storage_provider: Configured storage provider for file persistence.
         metadata: Optional JSON object supplied as a form field.
 
     Returns:
@@ -143,52 +144,46 @@ async def create_source(
             raise BadRequestError(
                 f"Invalid Content-Length header: {content_length}"
             ) from None
-        else:
-            if content_length_int > settings.upload_max_file_size_bytes:
-                raise PayloadTooLargeError(
-                    f"File exceeds maximum size of "
-                    f"{settings.upload_max_file_size_bytes} bytes"
-                )
+        if content_length_int > settings.upload_max_file_size_bytes:
+            raise PayloadTooLargeError(
+                f"File exceeds maximum size of "
+                f"{settings.upload_max_file_size_bytes} bytes"
+            )
 
     source_id = uuid.uuid4()
-    file_path = settings.upload_dir / str(source_id)
     metadata_dict = _parse_metadata(metadata)
 
-    total_size = 0
-    try:
-        async with aiofiles.open(file_path, "wb") as f:
-            while chunk := await file.read(_CHUNK_SIZE):
-                total_size += len(chunk)
-                if total_size > settings.upload_max_file_size_bytes:
-                    raise PayloadTooLargeError(
-                        f"File exceeds maximum size of "
-                        f"{settings.upload_max_file_size_bytes} bytes"
-                    )
-                await f.write(chunk)
-    except PayloadTooLargeError:
-        with contextlib.suppress(OSError):
-            await _delete_upload(file_path)
-        raise
+    # Check actual file size by seeking to end via the underlying sync file.
+    file.file.seek(0, 2)
+    total_size = file.file.tell()
+    file.file.seek(0)
 
+    if total_size > settings.upload_max_file_size_bytes:
+        raise PayloadTooLargeError(
+            f"File exceeds maximum size of {settings.upload_max_file_size_bytes} bytes"
+        )
     if total_size == 0:
-        with contextlib.suppress(OSError):
-            await _delete_upload(file_path)
         raise BadRequestError("Empty files are not allowed")
 
     file_type = file.content_type or "application/octet-stream"
 
+    storage_key = await storage_provider.upload(
+        str(source_id), file.file, file.filename
+    )
+
     planner = IngestPlanner(settings)
     source_plan = planner.create_source_plan(
         source_id=source_id,
-        file_path=str(file_path),
+        file_path=storage_key,
         source_metadata=metadata_dict,
         original_filename=file.filename,
+        file_size=total_size,
     )
 
     try:
         source = Source(
             id=source_id,
-            storage_key=str(file_path),
+            storage_key=storage_key,
             file_name=file.filename,
             file_type=file_type,
             file_size=total_size,
@@ -204,7 +199,7 @@ async def create_source(
             "ingest_document",
             payload={
                 "source_id": str(source_id),
-                "file_path": str(file_path),
+                "storage_key": storage_key,
                 "source_metadata": metadata_dict,
             },
         )
@@ -212,11 +207,11 @@ async def create_source(
         logger.exception(
             "source_enqueue_failed",
             source_id=str(source_id),
-            file_path=str(file_path),
+            storage_key=storage_key,
             error=str(exc),
         )
-        with contextlib.suppress(OSError):
-            await _delete_upload(file_path)
+        with contextlib.suppress(StorageError):
+            await storage_provider.delete(storage_key)
         raise
 
     logger.info(
@@ -236,19 +231,6 @@ async def create_source(
         metadata=source.metadata_,
         job_id=job.id,
     )
-
-
-async def _delete_upload(file_path: Path) -> None:
-    """Best-effort deletion of a partially or fully written upload file."""
-    try:
-        file_path.unlink(missing_ok=True)
-    except OSError as exc:
-        logger.warning(
-            "failed_to_delete_upload_file",
-            file_path=str(file_path),
-            error=str(exc),
-        )
-        raise
 
 
 @router.get(
@@ -351,10 +333,11 @@ async def get_source(
 async def delete_source(
     source_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)] = ...,  # type: ignore[assignment]
+    storage_provider: Annotated[StorageProvider, Depends(get_storage_provider)] = ...,  # type: ignore[assignment]
 ) -> None:
     """Delete a source, its chunks (cascade), and the uploaded file."""
     source = await _get_source_or_404(db, source_id)
-    await _delete_upload(Path(source.storage_key))
+    await storage_provider.delete(source.storage_key)
     try:
         await db.delete(source)
     except Exception as exc:

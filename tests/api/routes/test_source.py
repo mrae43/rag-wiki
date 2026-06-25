@@ -14,15 +14,17 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from rag_wiki.api.dependencies import get_db
+from rag_wiki.api.dependencies import get_db, get_storage_provider
 from rag_wiki.db.models import Chunk, ProcessingStatus, Source
 from rag_wiki.main import create_app
 from rag_wiki.settings import Settings, get_settings
+from tests.conftest import FakeStorageProvider
 
 
 async def test_upload_source_creates_source_and_job(
     api_client: AsyncClient,
     db: AsyncSession,
+    mock_storage_provider: FakeStorageProvider,
 ) -> None:
     """POST /sources stores the file, creates a Source row, and returns a job_id."""
     content = b"This is a test document."
@@ -52,9 +54,10 @@ async def test_upload_source_creates_source_and_job(
     assert source.source_plan is not None
     assert source.source_plan["selected_parser"] == "simple"
 
-    upload_path = Path(source.storage_key)
-    assert upload_path.exists()
-    assert upload_path.read_bytes() == content
+    assert source.storage_key == f"sources/{source_id}"
+    key = source.storage_key
+    stored_chunks = [c async for c in mock_storage_provider.download(key)]
+    assert b"".join(stored_chunks) == content
 
 
 async def test_upload_empty_file_rejected(api_client: AsyncClient) -> None:
@@ -73,6 +76,7 @@ async def test_upload_empty_file_rejected(api_client: AsyncClient) -> None:
 async def test_upload_oversized_file_rejected(
     db: AsyncSession,
     tmp_path: Path,
+    mock_storage_provider: FakeStorageProvider,
 ) -> None:
     """Files exceeding the configured max size return a 413 Problem Detail."""
     settings = Settings.model_validate(get_settings())
@@ -86,6 +90,7 @@ async def test_upload_oversized_file_rejected(
         yield db
 
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_storage_provider] = lambda: mock_storage_provider
 
     from httpx import ASGITransport
 
@@ -114,7 +119,7 @@ async def test_list_sources_paginated_and_filtered(
     for i in range(3):
         db.add(
             Source(
-                file_path=f"/tmp/{i}.txt",
+                storage_key=f"/tmp/{i}.txt",
                 file_name=f"report-{i}.txt",
                 file_type="text/plain",
                 file_size=10,
@@ -141,7 +146,7 @@ async def test_list_sources_paginated_and_filtered(
 async def test_get_source_by_id(api_client: AsyncClient, db: AsyncSession) -> None:
     """GET /sources/{id} returns the source; unknown id returns 404."""
     source = Source(
-        file_path="/tmp/foo.txt",
+        storage_key="/tmp/foo.txt",
         file_name="foo.txt",
         file_type="text/plain",
         file_size=5,
@@ -161,20 +166,20 @@ async def test_get_source_by_id(api_client: AsyncClient, db: AsyncSession) -> No
 async def test_delete_source_removes_row_and_file(
     api_client: AsyncClient,
     db: AsyncSession,
-    tmp_path: Path,
+    mock_storage_provider: FakeStorageProvider,
 ) -> None:
     """DELETE /sources/{id} removes the DB row and the uploaded file."""
     source_id = uuid.uuid4()
-    upload_path = tmp_path / "uploads" / str(source_id)
-    await _mkdir(upload_path.parent)
-    upload_path.write_text("to be deleted")
+    storage_key = f"sources/{source_id}"
+    content = b"to be deleted"
+    mock_storage_provider._store[storage_key] = content
 
     source = Source(
         id=source_id,
-        file_path=str(upload_path),
+        storage_key=storage_key,
         file_name="delete-me.txt",
         file_type="text/plain",
-        file_size=13,
+        file_size=len(content),
         status=ProcessingStatus.PENDING,
     )
     db.add(source)
@@ -182,7 +187,7 @@ async def test_delete_source_removes_row_and_file(
 
     response = await api_client.delete(f"/api/v1/sources/{source_id}")
     assert response.status_code == 204
-    assert not upload_path.exists()
+    assert not await mock_storage_provider.exists(storage_key)
 
     result = await db.execute(select(Source).where(Source.id == source_id))
     assert result.scalar_one_or_none() is None
@@ -200,7 +205,7 @@ async def test_list_source_chunks(
 ) -> None:
     """GET /sources/{id}/chunks returns paginated chunks without embeddings."""
     source = Source(
-        file_path="/tmp/chunks.txt",
+        storage_key="/tmp/chunks.txt",
         file_name="chunks.txt",
         file_type="text/plain",
         file_size=10,

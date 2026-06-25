@@ -83,7 +83,7 @@ async def test_resolve_entities_creates_new_when_no_candidates(
 ) -> None:
     """Empty entities table → new Entity is created."""
     source = Source(
-        file_path="/tmp/test",
+        storage_key="/tmp/test",
         file_name="test",
         file_type="txt",
         file_size=0,
@@ -144,7 +144,7 @@ async def test_resolve_entities_merges_when_llm_decides_merge(
     await db.flush()
 
     source = Source(
-        file_path="/tmp/test",
+        storage_key="/tmp/test",
         file_name="test",
         file_type="txt",
         file_size=0,
@@ -200,7 +200,7 @@ async def test_resolve_entities_creates_relations_after_entities(
 ) -> None:
     """Extract 2 entities + 1 relation → verify relation row exists."""
     source = Source(
-        file_path="/tmp/test",
+        storage_key="/tmp/test",
         file_name="test",
         file_type="txt",
         file_size=0,
@@ -267,7 +267,7 @@ async def test_resolve_entities_skips_when_advisory_lock_fails(
 ) -> None:
     """Simulate lock contention by using a name that is already locked."""
     source = Source(
-        file_path="/tmp/test",
+        storage_key="/tmp/test",
         file_name="test",
         file_type="txt",
         file_size=0,

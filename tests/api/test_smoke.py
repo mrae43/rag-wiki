@@ -71,7 +71,7 @@ async def test_all_read_routes_return_success(
 ) -> None:
     """Every GET endpoint returns a success response when data exists."""
     source = Source(
-        file_path="/tmp/smoke.txt",
+        storage_key="/tmp/smoke.txt",
         file_name="smoke.txt",
         file_type="text/plain",
         file_size=5,

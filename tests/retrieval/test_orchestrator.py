@@ -50,7 +50,7 @@ def embed_provider() -> EmbeddingProvider:
 async def _seed_graph(db: AsyncSession) -> tuple[Entity, Entity, Entity]:
     """Create a small knowledge graph for retrieval tests."""
     source = Source(
-        file_path="/tmp/retrieval.txt",
+        storage_key="/tmp/retrieval.txt",
         file_name="retrieval.txt",
         file_type="text/plain",
         file_size=100,

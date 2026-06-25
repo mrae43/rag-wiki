@@ -40,7 +40,7 @@ async def test_merge_entity_repoints_relations_and_deletes_source(
 
     # Create a chunk and relation from B → A.
     source = Source(
-        file_path="/tmp/test",
+        storage_key="/tmp/test",
         file_name="test",
         file_type="txt",
         file_size=0,
@@ -107,7 +107,7 @@ async def test_merge_entity_deduplicates_chunk_entities(db: AsyncSession) -> Non
     await db.flush()
 
     source = Source(
-        file_path="/tmp/test",
+        storage_key="/tmp/test",
         file_name="test",
         file_type="txt",
         file_size=0,
