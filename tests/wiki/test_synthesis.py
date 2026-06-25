@@ -215,7 +215,7 @@ async def test_synthesize_entity_page_creates_page(db: AsyncSession) -> None:
     await db.flush()
 
     source = Source(
-        file_path="/tmp/test.txt",
+        storage_key="/tmp/test.txt",
         file_name="test.txt",
         file_type="text/plain",
         file_size=100,
@@ -288,7 +288,7 @@ async def test_synthesize_entity_page_updates_existing(db: AsyncSession) -> None
     await db.flush()
 
     source = Source(
-        file_path="/tmp/test.txt",
+        storage_key="/tmp/test.txt",
         file_name="test.txt",
         file_type="text/plain",
         file_size=100,
@@ -379,7 +379,7 @@ async def test_synthesize_entity_page_advisory_lock_exhausted(
 async def test_synthesize_source_summary_creates_page(db: AsyncSession) -> None:
     """Happy path: creates source summary WikiPage."""
     source = Source(
-        file_path="/tmp/doc.txt",
+        storage_key="/tmp/doc.txt",
         file_name="doc.txt",
         file_type="text/plain",
         file_size=50,
@@ -419,7 +419,7 @@ async def test_synthesize_source_summary_skips_on_llm_error(
 ) -> None:
     """LLM error -> returns normally (worker completes job per PRD section 9)."""
     source = Source(
-        file_path="/tmp/doc.txt",
+        storage_key="/tmp/doc.txt",
         file_name="doc.txt",
         file_type="text/plain",
         file_size=50,
@@ -514,7 +514,7 @@ async def test_synthesize_entity_page_llm_error_skips(
     await db.flush()
 
     source = Source(
-        file_path="/tmp/skip.txt",
+        storage_key="/tmp/skip.txt",
         file_name="skip.txt",
         file_type="text/plain",
         file_size=50,

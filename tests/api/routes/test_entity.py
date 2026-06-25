@@ -90,7 +90,7 @@ async def test_get_entity_by_id(api_client: AsyncClient, db: AsyncSession) -> No
 async def _seed_chunk(db: AsyncSession) -> Chunk:
     """Create and flush a minimal source + chunk for relation provenance."""
     source = Source(
-        file_path="/tmp/relation-chunk.txt",
+        storage_key="/tmp/relation-chunk.txt",
         file_name="relation-chunk.txt",
         file_type="text/plain",
         file_size=10,

@@ -24,7 +24,7 @@ def _embedding(dim: int, value: float = 1.0) -> list[float]:
 
 async def _make_source(db: AsyncSession) -> Source:
     src = Source(
-        file_path="/tmp/test.pdf",
+        storage_key="/tmp/test.pdf",
         file_name="test.pdf",
         file_type="application/pdf",
         file_size=1234,

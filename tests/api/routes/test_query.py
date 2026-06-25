@@ -52,7 +52,7 @@ async def _seed_entity(
 ) -> Entity:
     """Create a minimal entity for query tests."""
     source = Source(
-        file_path="/tmp/query.txt",
+        storage_key="/tmp/query.txt",
         file_name="query.txt",
         file_type="text/plain",
         file_size=10,

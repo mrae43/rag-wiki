@@ -32,7 +32,7 @@ async def _make_relation(
     rel_type: str = "relates_to",
 ) -> Relation:
     src = Source(
-        file_path="/tmp/test.pdf",
+        storage_key="/tmp/test.pdf",
         file_name="test.pdf",
         file_type="application/pdf",
         file_size=1234,
