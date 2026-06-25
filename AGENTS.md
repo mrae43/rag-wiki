@@ -238,6 +238,20 @@ live schema. See [README.md](README.md) for the full workflow.
 
 See [README.md#local-development-without-docker](README.md#local-development-without-docker) for host venv setup and quality commands.
 
+### `.venv` owned by root (permission denied with `uv run`)
+
+If `uv run` fails with `Permission denied` on `.venv/` files, the venv was
+accidentally created as root (e.g. via Docker container, `sudo uv` install, or
+`sudo uv sync`). Fix:
+
+```bash
+sudo rm -rf .venv && uv venv && uv sync --extra dev
+```
+
+To prevent recurrence: ensure `uv` is installed under your user
+(`curl -LsSf https://astral.sh/uv/install.sh | sh`), not via `sudo` or pip
+system-wide.
+
 ---
 
 ## Not yet decided
