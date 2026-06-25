@@ -1,3 +1,11 @@
+"""
+tests.storage.test_storage_s3
+-----------------------------
+Contract tests for S3StorageProvider against a live S3-compatible endpoint.
+Skipped automatically when rag-wiki[s3] extra or RAG_WIKI_TEST_S3_ENDPOINT
+is absent.
+"""
+
 from __future__ import annotations
 
 import os

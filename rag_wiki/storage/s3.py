@@ -1,3 +1,11 @@
+"""
+rag_wiki.storage.s3
+------------------
+S3-compatible storage provider using aioboto3.
+Supports AWS S3, MinIO, SeaweedFS, and any S3-compatible backend.
+Does NOT handle local filesystem storage — use LocalStorageProvider for that.
+"""
+
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -96,7 +104,8 @@ class S3StorageProvider(StorageProvider):
                 await s3.head_object(Bucket=self._bucket, Key=key)
             return True
         except ClientError as exc:
-            code = exc.response["Error"]["Code"]
+            error = exc.response.get("Error", {})
+            code = error.get("Code", "")
             if code in ("404", "NoSuchKey"):
                 return False
             logger.error(
