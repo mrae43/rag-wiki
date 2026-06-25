@@ -31,7 +31,7 @@ from rag_wiki.wiki.synthesis import (
     synthesize_entity_page,
     synthesize_source_summary,
 )
-from tests.conftest import FakeChatProvider
+from tests.conftest import FakeChatProvider, FakeStorageProvider
 
 # ---------------------------------------------------------------------------
 # Persistent DB fixture (commits for real, truncates at teardown)
@@ -172,19 +172,27 @@ async def drain_synthesis_jobs(
 
 
 @pytest.fixture
+def storage_provider() -> FakeStorageProvider:
+    """Return a shared FakeStorageProvider for E2E tests."""
+    return FakeStorageProvider()
+
+
+@pytest.fixture
 async def e2e_client(
     persistent_db: AsyncSession,
     tmp_path: Path,
+    storage_provider: FakeStorageProvider,
 ) -> AsyncGenerator[AsyncClient, None]:
     """FastAPI test client wired to ``persistent_db`` with fake providers.
 
     The client uses the same ``create_app()`` as the real API but overrides
-    the database, chat, and embedding dependencies.
+    the database, chat, embedding, and storage dependencies.
     """
     from rag_wiki.api.dependencies import (
         get_chat_provider,
         get_db,
         get_embedding_provider,
+        get_storage_provider,
     )
     from rag_wiki.main import create_app
 
@@ -208,6 +216,7 @@ async def e2e_client(
     app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_chat_provider] = _override_chat
     app.dependency_overrides[get_embedding_provider] = _override_embed
+    app.dependency_overrides[get_storage_provider] = lambda: storage_provider
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
