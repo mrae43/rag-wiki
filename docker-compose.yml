@@ -27,6 +27,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      seaweedfs_filer:
+        condition: service_healthy
 
   worker:
     build: .
@@ -37,6 +39,8 @@ services:
       - .:/app
     depends_on:
       db:
+        condition: service_healthy
+      seaweedfs_filer:
         condition: service_healthy
 
   pgadmin:
@@ -56,6 +60,45 @@ services:
       db:
         condition: service_healthy
 
+  seaweedfs_master:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs_master
+    command: "master -port=9333"
+    ports:
+      - "9333:9333"
+    volumes:
+      - seaweedfs_master_data:/data
+
+  seaweedfs_volume:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs_volume
+    command: "volume -mserver=seaweedfs_master:9333"
+    depends_on:
+      seaweedfs_master:
+        condition: service_started
+    volumes:
+      - seaweedfs_volume_data:/data
+
+  seaweedfs_filer:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs_filer
+    command: "filer -port=8333 -master=seaweedfs_master:9333 -s3 -s3.port=8334 -defaultStoreDir=/data"
+    ports:
+      - "8333:8333"
+      - "8334:8334"
+    depends_on:
+      seaweedfs_master:
+        condition: service_started
+      seaweedfs_volume:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8333/"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
 volumes:
   postgres_data:
   pgadmin_data:
+  seaweedfs_master_data:
+  seaweedfs_volume_data:
