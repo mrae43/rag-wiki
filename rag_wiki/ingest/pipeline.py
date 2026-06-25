@@ -28,6 +28,7 @@ from rag_wiki.planner.base import SourcePlan
 from rag_wiki.planner.ingest import IngestPlanner
 from rag_wiki.providers.base import ChatProvider, EmbeddingProvider
 from rag_wiki.settings import get_settings
+from rag_wiki.storage.base import StorageProvider
 from rag_wiki.wiki.synthesis import (
     JOB_TYPE_SYNTHESIZE_ENTITY,
     JOB_TYPE_SYNTHESIZE_SOURCE_SUMMARY,
@@ -41,33 +42,77 @@ async def run_ingest_pipeline(
     db: AsyncSession,
     chat_provider: ChatProvider,
     embed_provider: EmbeddingProvider,
+    storage_provider: StorageProvider | None = None,
 ) -> None:
     """Run the full ingestion pipeline for a single job.
 
     Args:
-        job: The job to process. payload must contain ``file_path``.
+        job: The job to process. payload may contain ``storage_key`` (from API
+            upload via StorageProvider) or ``file_path`` (legacy CLI path).
         db: Active async SQLAlchemy session. Caller must commit.
         chat_provider: LLM provider for captioning and extraction.
         embed_provider: Embedding provider for chunk and entity embeddings.
+        storage_provider: Optional storage provider. Required when payload uses
+            ``storage_key``; may be omitted for legacy ``file_path`` jobs.
 
     Raises:
         IngestError: If the file cannot be parsed or all chunks fail.
     """
-    settings = get_settings()
     payload = job.payload or {}
-    file_path = payload.get("file_path")
+    storage_key: str | None = payload.get("storage_key")
+    file_path: str | None = payload.get("file_path")
+
+    # Resolve the local file path — download from provider or use direct path.
+    if storage_key:
+        if storage_provider is None:
+            raise IngestError(
+                f"Job payload has storage_key but no storage_provider: job_id={job.id}"
+            )
+        async with storage_provider.with_temp_file(storage_key) as tmp:
+            file_path = str(tmp)
+            return await _run_ingest_pipeline(
+                job,
+                db,
+                chat_provider,
+                embed_provider,
+                resolved_path=file_path,
+                storage_key=storage_key,
+            )
+
     if not file_path or not isinstance(file_path, str):
         raise IngestError(f"Job payload missing file_path: job_id={job.id}")
+    if not os.path.isfile(file_path):
+        raise IngestError(f"File not found: {file_path!r}")
 
+    return await _run_ingest_pipeline(
+        job,
+        db,
+        chat_provider,
+        embed_provider,
+        resolved_path=file_path,
+        storage_key=file_path,
+    )
+
+
+async def _run_ingest_pipeline(
+    job: Job,
+    db: AsyncSession,
+    chat_provider: ChatProvider,
+    embed_provider: EmbeddingProvider,
+    *,
+    resolved_path: str,
+    storage_key: str,
+) -> None:
+    """Inner pipeline — runs after the file path is resolved."""
+    settings = get_settings()
+    payload = job.payload or {}
     source_meta = payload.get("source_metadata")
     source_id = payload.get("source_id")
 
-    # Compute required Source fields from filesystem.
-    if not os.path.isfile(file_path):
-        raise IngestError(f"File not found: {file_path!r}")
-    file_type, _ = mimetypes.guess_type(file_path)
+    # Detect file metadata from the resolved file path for Source creation.
+    file_type, _ = mimetypes.guess_type(resolved_path)
     file_type = file_type or "application/octet-stream"
-    file_size = os.path.getsize(file_path)
+    file_size = os.path.getsize(resolved_path)
 
     source: Source | None = None
     if source_id is not None:
@@ -83,15 +128,15 @@ async def run_ingest_pipeline(
     # 1. Create or reuse Source.
     if source is not None:
         source.status = ProcessingStatus.PROCESSING
-        source.storage_key = file_path
+        source.storage_key = storage_key
         source.file_type = file_type
         source.file_size = file_size
         if source_meta is not None:
             source.metadata_ = source_meta
     else:
         source = Source(
-            storage_key=file_path,
-            file_name=os.path.basename(file_path),
+            storage_key=storage_key,
+            file_name=os.path.basename(resolved_path),
             file_type=file_type,
             file_size=file_size,
             status=ProcessingStatus.PROCESSING,
@@ -104,7 +149,7 @@ async def run_ingest_pipeline(
         "ingest pipeline started",
         job_id=str(job.id),
         source_id=str(source.id),
-        file_path=file_path,
+        file_path=resolved_path,
     )
 
     # 2. Parse (CPU-bound, offload to thread).
@@ -112,7 +157,7 @@ async def run_ingest_pipeline(
         planner = IngestPlanner(get_settings())
         fallback_plan = planner.create_source_plan(
             source_id=source.id,
-            file_path=file_path,
+            file_path=resolved_path,
             source_metadata=source.metadata_,
             original_filename=source.file_name,
         )
@@ -123,13 +168,13 @@ async def run_ingest_pipeline(
 
     try:
         parsed_chunks: list[ParsedChunk] = await asyncio.to_thread(
-            parse_document, file_path, source_plan
+            parse_document, resolved_path, source_plan
         )
     except Exception as exc:
         source.status = ProcessingStatus.FAILED
         raise IngestError(
             f"Failed to parse document: source_id={source.id!r} "
-            f"path={file_path!r} parser={source_plan.selected_parser}"
+            f"path={resolved_path!r} parser={source_plan.selected_parser}"
         ) from exc
 
     # 3. Create Chunk rows.
