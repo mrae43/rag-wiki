@@ -6,11 +6,15 @@ from collections.abc import Awaitable, Callable
 import pytest
 
 from rag_wiki.settings import Settings
-from rag_wiki.storage.s3 import S3StorageProvider
+
+try:
+    from rag_wiki.storage.s3 import S3StorageProvider
+except ImportError:
+    S3StorageProvider = None  # type: ignore[assignment,misc]
 
 pytestmark = pytest.mark.skipif(
-    not os.getenv("RAG_WIKI_TEST_S3_ENDPOINT"),
-    reason="RAG_WIKI_TEST_S3_ENDPOINT not set — requires a real S3/SeaweedFS endpoint",
+    S3StorageProvider is None or not os.getenv("RAG_WIKI_TEST_S3_ENDPOINT"),
+    reason="rag-wiki[s3] extra not installed or RAG_WIKI_TEST_S3_ENDPOINT not set",
 )
 
 
