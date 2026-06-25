@@ -24,6 +24,7 @@ from rag_wiki.ingest.pipeline import run_ingest_pipeline
 from rag_wiki.jobs import claim_next, complete_job, fail_job, release_claim_to_pending
 from rag_wiki.providers import get_chat_provider, get_embedding_provider
 from rag_wiki.settings import get_settings
+from rag_wiki.storage import get_storage_provider
 from rag_wiki.wiki.synthesis import (
     synthesize_entity_page,
     synthesize_source_summary,
@@ -42,6 +43,7 @@ async def worker_loop() -> None:
     settings = get_settings()
     chat_provider = get_chat_provider(settings)
     embed_provider = get_embedding_provider(settings)
+    storage_provider = get_storage_provider(settings)
     stop_event = asyncio.Event()
     worker_id = f"{socket.gethostname()}-{os.getpid()}"
 
@@ -70,7 +72,7 @@ async def worker_loop() -> None:
                 try:
                     if job.job_type == "ingest_document":
                         await run_ingest_pipeline(
-                            job, db, chat_provider, embed_provider
+                            job, db, chat_provider, embed_provider, storage_provider
                         )
                     elif job.job_type == "synthesize_entity":
                         await synthesize_entity_page(
