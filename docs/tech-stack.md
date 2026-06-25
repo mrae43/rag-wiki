@@ -54,6 +54,8 @@ decisions requiring justification.
 - Per-operation model selection via config (e.g. `LLM_MODEL_CAPTION`,
   `LLM_MODEL_EXTRACTION`, `LLM_MODEL_WIKI_SYNTHESIS`, `LLM_MODEL_QUERY`,
   `EMBEDDING_MODEL`).
+- **`aioboto3`** — optional dependency (`pip install rag-wiki[s3]`) for S3/SeaweedFS
+  storage provider implementation (ADR-0015).
 
 ## Testing & quality
 - **pytest** + **pytest-asyncio** — unit/integration tests.
@@ -64,11 +66,21 @@ decisions requiring justification.
 ## Deployment (ADR-0004)
 - **Docker** images for API and worker.
 - **Docker Compose** — local dev / small single-instance deployments (API +
-  worker + Postgres).
+  worker + Postgres + SeaweedFS (S3-compatible storage), ADR-0015).
 - **Helm chart** — production deployment target for enterprise customers
   (multi-replica API/worker against a managed or self-hosted Postgres).
 - Configuration entirely via environment variables (12-factor style), documented
   in a `.env.example`.
+
+## Storage (ADR-0015)
+- **SeaweedFS** — self-hosted S3-compatible store (optional dependency,
+  `pip install rag-wiki[s3]`). Provides shared storage across containers in
+  Docker Compose without per-host binding mounts.
+- **Storage provider** abstraction with `LocalStorageProvider` (filesystem,
+  default) and `S3StorageProvider` (aioboto3, optional). Configuration via
+  `STORAGE_PROVIDER` and `S3_*` environment variables.
+- **upload_dir** persists only in `LocalStorageProvider`; all other storage
+  providers use opaque `storage_key` column and external store.
 
 ## Wiki file export (ADR-0006)
 - A `rag-wiki export` CLI command renders `wiki_pages` rows to a directory of
