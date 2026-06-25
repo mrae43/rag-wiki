@@ -76,7 +76,7 @@ go through the `ChatProvider` and `EmbeddingProvider` protocols (defined in
 `openai` or `anthropic` outside `rag_wiki/providers/`. Per-operation model
 selection via env vars:
 `LLM_MODEL_CAPTION`, `LLM_MODEL_EXTRACTION`, `LLM_MODEL_RESOLUTION`,
-`LLM_MODEL_WIKI_SYNTHESIS`, `LLM_MODEL_QUERY`, `EMBEDDING_MODEL`.
+`LLM_MODEL_WIKI_SYNTHESIS`, `LLM_MODEL_QUERY`, `LLM_MODEL_QUERY_CLASSIFICATION`, `EMBEDDING_MODEL`.
 Also set `LLM_PROVIDER` (chat) and `LLM_EMBEDDING_PROVIDER` (embeddings),
 `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_API_VERSION`. (ADR-0007)
 
@@ -107,6 +107,16 @@ only, not defer-all-to-batch. (ADR-0008)
 `relations`, and `wiki_pages` must include a `status` column defaulting to
 `published` so a future `pending_review` workflow is additive. (ADR-0010)
 
+**Planner-driven processing** — a planner module classifies documents (density,
+content type) and queries (intent, complexity) and routes each operation to the
+optimal strategy and model. Planner decisions are logged in every plan for
+provenance. (ADR-0014)
+
+**Pluggable storage provider** — source files are stored on the local filesystem
+by default (`STORAGE_PROVIDER=local`). An S3-compatible backend
+(`STORAGE_PROVIDER=s3`) is available via the `StorageProvider` protocol; swap by
+config, no application code changes. (ADR-0015)
+
 ---
 
 ## ADR index
@@ -126,6 +136,8 @@ only, not defer-all-to-batch. (ADR-0008)
 | 0011 | Parsing | MinerU primary parser (deferred); lightweight is default |
 | 0012 | Retrieval | Hybrid retrieval implementation — vector seed + CTE traversal + context assembly |
 | 0013 | API | FastAPI API surface for automation and integration |
+| 0014 | Planner | Ingest and query planner — classify documents/queries by confidence and density, route to optimal strategy and model |
+| 0015 | Storage | S3-compatible storage provider (SeaweedFS, MinIO); local default, s3 optional via config |
 
 ---
 
@@ -150,10 +162,20 @@ rag_wiki/
     anthropic.py         # Stub — TODO (#TODO comment, no code)
     __init__.py          # Retry wrapper, provider registry, get_chat_provider()
   ingest/              # Parse → chunk → caption → embed → extract → resolve pipeline
+  planner/             # Ingest and query planner — classify, route, strategy selection
+    base.py              # Base planner classes
+    ingest.py            # Ingest-specific planning
+    query.py             # Query-specific planning
+    exceptions.py        # Planner-specific exceptions
   graph/               # extraction.py, resolution.py, merge.py, schemas.py
   retrieval/           # Hybrid retrieval (seeds.py, traversal.py, context.py, scoring.py, schemas.py, orchestrator.py)
   wiki/                # Wiki synthesis (synthesis.py, context.py, slug.py, templates/)
   jobs/                # Job queue (enqueue, claim_next, complete_job, fail_job)
+  storage/             # Pluggable storage provider
+    base.py              # StorageProvider protocol
+    local.py             # Local filesystem backend
+    s3.py                # S3-compatible backend
+  prompts/             # LLM prompt templates
   db/
     models/              # graph.py, wiki.py, jobs.py, source.py, index.py (Chunk lives here)
     session.py           # Async session factory
@@ -167,6 +189,8 @@ tests/
   wiki/
   jobs/
   api/                 # API route tests
+  planner/
+  storage/
   conftest.py            # Shared fixtures
   test_smoke.py          # Top-level smoke tests
 ```

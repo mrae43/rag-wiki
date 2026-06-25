@@ -14,10 +14,12 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 - **Multimodal ingestion** — text, tables, and images parsed into typed chunks (lightweight by default; optional MinerU-backed full multimodal path)
 - **Knowledge graph** — entities and relations extracted from every chunk, stored as plain relational tables in Postgres with real-time entity resolution
 - **Hybrid retrieval** — vector similarity (pgvector) seeds a graph traversal (recursive CTE) for richer, context-aware answers
+- **Intelligent planner** — classifies queries and documents by confidence and density, routes each operation to the optimal processing strategy and model
 - **LLM-maintained wiki** — markdown pages synthesized and kept current in Postgres during ingestion; optional export to a directory of `.md` files for Obsidian browsing is planned
-- **Pluggable LLM providers** — OpenAI (fully implemented); Anthropic, Azure OpenAI, vLLM, and Ollama are config variants on the OpenAI-compatible path — swap by config, no code changes
+- **Pluggable LLM providers** — OpenAI (fully implemented); Anthropic (stub); Azure OpenAI, vLLM, and Ollama via the OpenAI provider with `base_url` config — swap by config, no code changes
 - **Single Postgres backend** — vectors, knowledge graph, job queue, and wiki pages all in one database; no Redis, no Neo4j, no separate vector store
 - **Background job queue** — Postgres-native (`SELECT FOR UPDATE SKIP LOCKED`), durable and restart-safe, with a clear migration path to Celery/RQ
+- **Pluggable storage** — source files stored locally or on S3-compatible backends (SeaweedFS, MinIO); swap by config, no application code changes
 - **Self-hosted, enterprise-ready** — Docker Compose for small teams, Helm chart for production; single-tenant by design for data sovereignty
 - **Obsidian export** — *planned* — `rag-wiki export` will render wiki pages to a directory of `.md` files for graph-view browsing
 
@@ -31,11 +33,18 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
         │                                                ▼
         ▼                                     ┌──────────────────┐
   ┌──────────┐                                │   LLMProvider    │
-  │  Parser  │                                │ (OpenAI / Anthr  │
-  │ (hybrid) │                                │  / vLLM / Ollama)│
+  │  Parser  │                                │  (OpenAI /       │
+  │ (hybrid) │                                │   Anthropic)     │
   └────┬─────┘                                └────────┬─────────┘
        │                                               │
        ▼                                               │
+  ┌──────────────┐                                      │
+  │   Planner    │                                      │
+  │  (classify,  │                                      │
+  │   route)     │                                      │
+  └──────┬───────┘                                      │
+         │                                              │
+         ▼                                              │
   ┌─────────────────────────────────────────────────────────────┐
   │                    PostgreSQL 16+                            │
   │                                                              │
@@ -48,14 +57,20 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
   │  │   jobs   │──▶│  worker       │───▶  ┌───────────────┐    │
   │  │  (queue) │   │  (claim +     │    │  wiki_pages   │    │
   │  └──────────┘   │   synthesize) │    │  (markdown)   │    │
-  │                  └───────────────┘    └───────────────┘    │
-  └─────────────────────────────────────────────────────────────┘
+  │                  └───────────────┘    └───────┬───────┘    │
+  └──────────────────────────────────────────────┼─────────────┘
+                                                   │
+                                                   ▼
+                                           ┌──────────────┐
+                                           │   Storage    │
+                                           │ (local / S3) │
+                                           └──────────────┘
 ```
 
 **Three operations drive everything:**
 
-- **Ingest** ✅ — parse source → extract chunks → caption non-text → embed → extract entities/relations → resolve against existing graph → synthesize/update wiki pages for every entity and source
-- **Query** ✅ — hybrid retrieval (vector seed → graph traversal → context assembly) with optional LLM-generated answer via `POST /api/v1/queries`
+- **Ingest** ✅ — parse source → extract chunks → caption non-text → embed → extract entities/relations → resolve against existing graph → synthesize/update wiki pages for every entity and source. Operations are routed through the planner which selects the processing strategy per document.
+- **Query** ✅ — query classified by the planner, then hybrid retrieval (vector seed → graph traversal → context assembly) with optional LLM-generated answer via `POST /api/v1/queries`
 - **Lint** 🔲 — periodic health check: find duplicate entities, contradictions, orphan pages, stale claims, missing cross-references
 
 See `docs/adr/` for all architectural decisions and their rationale.
@@ -75,12 +90,12 @@ Enterprise knowledge bases contain sensitive documents — internal research, cu
 ## Supported LLM providers
 
 | Provider | Notes |
-|---|---|
-| OpenAI | GPT-4o, GPT-4o-mini, text-embedding-3-* |
-| Azure OpenAI | Same client, `base_url` + `api_version` config |
-| Anthropic | Stub — only OpenAI provider is implemented (see `rag_wiki/providers/anthropic.py`) |
-| vLLM | Any OpenAI-compatible self-hosted model |
-| Ollama | Local models (Llama 3, Mistral, etc.) |
+|---|---|---|
+| OpenAI | Full implementation (chat + embeddings); GPT-4o, GPT-4o-mini, text-embedding-3-* |
+| Azure OpenAI | Used via the OpenAI provider with `base_url` + `api_version` |
+| Anthropic | Stub (`rag_wiki/providers/anthropic.py`); not yet implemented or registered |
+| vLLM | Used via the OpenAI provider with custom `base_url` |
+| Ollama | Used via the OpenAI provider with custom `base_url` |
 
 Different operations can use different models — e.g. a cheap/fast model for captioning, a stronger model for wiki synthesis. Configured via env vars per operation.
 
@@ -121,7 +136,7 @@ LLM_API_KEY=sk-...
 LLM_MODEL_EXTRACTION=gpt-4o-mini
 LLM_MODEL_WIKI_SYNTHESIS=gpt-4o
 LLM_MODEL_QUERY=gpt-4o
-EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_MODEL=gemini-embedding-2
 EMBEDDING_DIMENSIONS=3072
 ```
 
@@ -210,6 +225,18 @@ uv run uvicorn rag_wiki.main:app --host 0.0.0.0 --port 8000 --reload
 | `UPLOAD_DIR` | `./uploads` | Directory for uploaded source files |
 | `UPLOAD_MAX_FILE_SIZE_BYTES` | `104857600` | Maximum upload size (100 MB) |
 | `CORS_ORIGINS` | `""` | Comma-separated allowed origins |
+| `STORAGE_PROVIDER` | `local` | `local` or `s3` (S3-compatible backends) |
+| `S3_BUCKET` | `rag-wiki` | S3 bucket name |
+| `S3_ENDPOINT_URL` | `""` | S3 endpoint (e.g. SeaweedFS, MinIO) |
+| `S3_ACCESS_KEY_ID` | `""` | S3 access key |
+| `S3_SECRET_ACCESS_KEY` | `""` | S3 secret key |
+| `S3_REGION` | `us-east-1` | S3 region |
+| `PLANNER_VERSION` | `1.0.0` | Planner version identifier |
+| `LLM_MODEL_QUERY_CLASSIFICATION` | `gpt-4o-mini` | Model for query intent classification |
+| `PLANNER_CONFIDENCE_HIGH` | `0.8` | Confidence threshold for direct execution |
+| `PLANNER_CONFIDENCE_LOW` | `0.5` | Confidence threshold for escalated depth |
+| `PLANNER_CONFIDENCE_MINIMUM` | `0.5` | Minimum confidence before halt |
+| `PLANNER_DENSITY_LARGE_THRESHOLD_BYTES` | `10485760` | File size threshold for "large" classification |
 
 ### Documentation
 
@@ -257,7 +284,7 @@ and markdown. The system runs fully without MinerU.
 ## Deployment
 
 ### Small team / single instance
-Docker Compose is the recommended path. Everything runs in one `compose.yml`:
+Docker Compose is the recommended path. Everything runs in one `docker-compose.yml`:
 API, worker, and Postgres. Suitable for a team of up to ~20 with moderate
 ingestion volume.
 
@@ -285,7 +312,7 @@ single source of truth for the package layout and test mirroring conventions.
 
 | Status | Item |
 |---|---|
-| ✅ Done | Architecture decisions (13 ADRs) |
+| ✅ Done | Architecture decisions (15 ADRs) |
 | ✅ Done | Coding standards, tech stack, agent guidance |
 | ✅ Done | Database schema + Alembic migrations |
 | ✅ Done | Lightweight parsing pipeline |
