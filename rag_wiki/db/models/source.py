@@ -34,11 +34,11 @@ class ProcessingStatus(enum.StrEnum):
 
 
 class Source(Base, UUIDMixin, TimestampMixin):
-    """Metadata about an ingested document. File content lives on disk."""
+    """Metadata about an ingested document. File content lives in storage."""
 
     __tablename__ = "sources"
 
-    file_path: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    storage_key: Mapped[str] = mapped_column(sa.Text, nullable=False)
     file_name: Mapped[str] = mapped_column(sa.Text, nullable=False)
     file_type: Mapped[str] = mapped_column(sa.Text, nullable=False)
     file_size: Mapped[int] = mapped_column(sa.Integer, nullable=False)
