@@ -159,7 +159,11 @@ class FakeChatProvider:
 class FakeEmbeddingProvider:
     """Test double that satisfies the EmbeddingProvider protocol."""
 
-    async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+    async def embed(
+        self,
+        texts: list[str],
+        model: str,
+    ) -> list[list[float]]:
         """Return a zero-filled embedding vector for each input text."""
         dims = get_settings().embedding_dimensions
         return [[0.0] * dims for _ in texts]
