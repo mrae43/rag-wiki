@@ -188,7 +188,7 @@ async def create_source(
     try:
         source = Source(
             id=source_id,
-            file_path=str(file_path),
+            storage_key=str(file_path),
             file_name=file.filename,
             file_type=file_type,
             file_size=total_size,
@@ -354,7 +354,7 @@ async def delete_source(
 ) -> None:
     """Delete a source, its chunks (cascade), and the uploaded file."""
     source = await _get_source_or_404(db, source_id)
-    await _delete_upload(Path(source.file_path))
+    await _delete_upload(Path(source.storage_key))
     try:
         await db.delete(source)
     except Exception as exc:

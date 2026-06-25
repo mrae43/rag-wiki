@@ -52,7 +52,7 @@ async def test_upload_source_creates_source_and_job(
     assert source.source_plan is not None
     assert source.source_plan["selected_parser"] == "simple"
 
-    upload_path = Path(source.file_path)
+    upload_path = Path(source.storage_key)
     assert upload_path.exists()
     assert upload_path.read_bytes() == content
 
