@@ -83,14 +83,14 @@ async def run_ingest_pipeline(
     # 1. Create or reuse Source.
     if source is not None:
         source.status = ProcessingStatus.PROCESSING
-        source.file_path = file_path
+        source.storage_key = file_path
         source.file_type = file_type
         source.file_size = file_size
         if source_meta is not None:
             source.metadata_ = source_meta
     else:
         source = Source(
-            file_path=file_path,
+            storage_key=file_path,
             file_name=os.path.basename(file_path),
             file_type=file_type,
             file_size=file_size,
