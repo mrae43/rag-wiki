@@ -27,6 +27,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      seaweedfs_filer:
+        condition: service_healthy
 
   worker:
     build: .
@@ -37,6 +39,8 @@ services:
       - .:/app
     depends_on:
       db:
+        condition: service_healthy
+      seaweedfs_filer:
         condition: service_healthy
 
   pgadmin:
@@ -56,6 +60,44 @@ services:
       db:
         condition: service_healthy
 
+  seaweedfs_master:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs_master
+    command: /usr/local/bin/seaweedfs master -port 9333 -ip bind -volume.min ⌘
+    ports:
+      - "9333:9333"
+    volumes:
+      - seaweedfs_master_data:/data
+
+  seaweedfs_volume:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs_volume
+    command: /usr/local/bin/seaweedfs volume -ip bind -mserver=localhost:9333 -volume.data=/data
+    depends_on:
+      seaweedfs_master:
+        condition: service_started
+    volumes:
+      - seaweedfs_volume_data:/data
+
+  seaweedfs_filer:
+    image: chrislusf/seaweedfs:latest
+    container_name: seaweedfs_filer
+    command: /usr/local/bin/seaweedfs filer -ip bind -port 8333 -s3 -filer.dir=/data -filer.privateUrl=http://${HOSTNAME:-localhost}:8333
+    ports:
+      - "8333:8333"
+    depends_on:
+      seaweedfs_master:
+        condition: service_started
+      seaweedfs_volume:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8333/"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
 volumes:
   postgres_data:
   pgadmin_data:
+  seaweedfs_master_data:
+  seaweedfs_volume_data:
