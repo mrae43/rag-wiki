@@ -19,13 +19,11 @@ from pathlib import Path
 from typing import BinaryIO
 
 import pytest
-from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from rag_wiki.db.base import Base
 from rag_wiki.exceptions import StorageError
-from rag_wiki.main import app as fastapi_app
 from rag_wiki.providers.base import (
     ChatProvider,
     CompletionRequest,
@@ -239,20 +237,3 @@ def mock_embedding_provider() -> EmbeddingProvider:
 def mock_storage_provider() -> FakeStorageProvider:
     """Return an in-memory storage provider for unit tests."""
     return FakeStorageProvider()
-
-
-@pytest.fixture
-async def client(db: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """FastAPI test client with DB dependency overridden."""
-    # Import lazily to avoid triggering module-level get_settings() before
-    # the settings fixture has patched the environment.
-    from rag_wiki.db.session import get_db
-
-    async def _override_get_db() -> AsyncGenerator[AsyncSession, None]:
-        yield db
-
-    fastapi_app.dependency_overrides[get_db] = _override_get_db
-    transport = ASGITransport(app=fastapi_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
-    fastapi_app.dependency_overrides.clear()
