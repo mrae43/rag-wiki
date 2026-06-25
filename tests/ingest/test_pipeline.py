@@ -197,7 +197,7 @@ async def test_ingest_pipeline_roundtrip(
 
     # Source
     result = await db.execute(
-        select(Source).where(Source.file_path == single_chunk_txt)
+        select(Source).where(Source.storage_key == single_chunk_txt)
     )
     source = result.scalar_one()
     assert source.status == ProcessingStatus.PROCESSED
@@ -268,7 +268,7 @@ async def test_ingest_pipeline_all_chunks_fail(
     await db.commit()
 
     result = await db.execute(
-        select(Source).where(Source.file_path == single_chunk_txt)
+        select(Source).where(Source.storage_key == single_chunk_txt)
     )
     source = result.scalar_one()
     assert source.status == ProcessingStatus.FAILED
@@ -297,7 +297,7 @@ async def test_ingest_pipeline_partial_fail(
     await run_ingest_pipeline(job, db, chat_provider, counting_provider)
     await db.commit()
 
-    result = await db.execute(select(Source).where(Source.file_path == two_chunk_txt))
+    result = await db.execute(select(Source).where(Source.storage_key == two_chunk_txt))
     source = result.scalar_one()
     assert source.status == ProcessingStatus.PROCESSED
 
