@@ -129,8 +129,6 @@ async def _run_ingest_pipeline(
     if source is not None:
         source.status = ProcessingStatus.PROCESSING
         source.storage_key = storage_key
-        source.file_type = file_type
-        source.file_size = file_size
         if source_meta is not None:
             source.metadata_ = source_meta
     else:
