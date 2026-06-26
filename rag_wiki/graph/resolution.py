@@ -16,6 +16,7 @@ relation indices. Returns a mapping of original index → resolved Entity.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import uuid
@@ -100,9 +101,9 @@ async def _search_similar_entities(
         text(
             """
             SELECT id, name, entity_type, description,
-                   embedding <-> :vec AS distance
+                   embedding <-> (:vec)::vector AS distance
             FROM entities
-            WHERE embedding <-> :vec <= :threshold
+            WHERE embedding <-> (:vec)::vector <= :threshold
             ORDER BY distance
             LIMIT :top_k
             """
@@ -339,7 +340,8 @@ async def resolve_entities(
                 {"chunk_id": chunk.id, "entity_id": entity_to_link.id},
             )
         finally:
-            await _release_advisory_lock(db, lock_key)
+            with contextlib.suppress(Exception):
+                await _release_advisory_lock(db, lock_key)
 
     # Batch insert chunk_entity links.
     if deferred_chunk_links:
