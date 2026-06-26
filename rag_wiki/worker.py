@@ -97,6 +97,8 @@ async def worker_loop() -> None:
                         job_type=job.job_type,
                         worker_id=worker_id,
                     )
+                    await db.rollback()
+                    await db.refresh(job)
                     await release_claim_to_pending(job, db)
                     await db.commit()
                 except Exception as exc:
@@ -110,6 +112,8 @@ async def worker_loop() -> None:
                         error=str(exc),
                         exc_info=True,
                     )
+                    await db.rollback()
+                    await db.refresh(job)
                     await fail_job(job, db, str(exc))
                     await db.commit()
 
