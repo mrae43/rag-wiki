@@ -22,6 +22,7 @@ from rag_wiki.providers.base import (
     CompletionResponse,
     EmbeddingProvider,
 )
+from rag_wiki.providers.googleai import GoogleAIProvider
 from rag_wiki.providers.openai import OpenAIProvider
 from rag_wiki.settings import Settings
 
@@ -33,6 +34,7 @@ CHAT_PROVIDERS: dict[str, Callable[[Settings], ChatProvider]] = {
 
 EMBEDDING_PROVIDERS: dict[str, Callable[[Settings], EmbeddingProvider]] = {
     "openai": OpenAIProvider,
+    "googleai": GoogleAIProvider,
 }
 
 
