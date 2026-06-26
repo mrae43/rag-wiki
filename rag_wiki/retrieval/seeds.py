@@ -108,10 +108,18 @@ async def find_seeds(
             result = await db.execute(
                 sa.select(Entity)
                 .options(
-                    joinedload(Entity.outgoing_relations).joinedload(Relation.target_entity),
-                    joinedload(Entity.incoming_relations).joinedload(Relation.source_entity),
-                    joinedload(Entity.outgoing_relations).joinedload(Relation.source_entity),
-                    joinedload(Entity.incoming_relations).joinedload(Relation.target_entity),
+                    joinedload(Entity.outgoing_relations).joinedload(
+                        Relation.target_entity
+                    ),
+                    joinedload(Entity.incoming_relations).joinedload(
+                        Relation.source_entity
+                    ),
+                    joinedload(Entity.outgoing_relations).joinedload(
+                        Relation.source_entity
+                    ),
+                    joinedload(Entity.incoming_relations).joinedload(
+                        Relation.target_entity
+                    ),
                 )
                 .where(Entity.id.in_(seed_entity_ids))
             )
@@ -144,10 +152,18 @@ async def find_seeds(
         result = await db.execute(
             sa.select(Entity)
             .options(
-                joinedload(Entity.outgoing_relations).joinedload(Relation.target_entity),
-                joinedload(Entity.incoming_relations).joinedload(Relation.source_entity),
-                joinedload(Entity.outgoing_relations).joinedload(Relation.source_entity),
-                joinedload(Entity.incoming_relations).joinedload(Relation.target_entity),
+                joinedload(Entity.outgoing_relations).joinedload(
+                    Relation.target_entity
+                ),
+                joinedload(Entity.incoming_relations).joinedload(
+                    Relation.source_entity
+                ),
+                joinedload(Entity.outgoing_relations).joinedload(
+                    Relation.source_entity
+                ),
+                joinedload(Entity.incoming_relations).joinedload(
+                    Relation.target_entity
+                ),
             )
             .where(Entity.embedding.is_not(None))
             .order_by(Entity.embedding.cosine_distance(query_embedding))
