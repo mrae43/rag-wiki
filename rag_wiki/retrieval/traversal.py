@@ -136,6 +136,12 @@ async def traverse(
                 joinedload(Entity.incoming_relations).joinedload(
                     Relation.source_entity
                 ),
+                joinedload(Entity.outgoing_relations).joinedload(
+                    Relation.source_entity
+                ),
+                joinedload(Entity.incoming_relations).joinedload(
+                    Relation.target_entity
+                ),
             )
             .where(Entity.id.in_(limited_ids))
         )

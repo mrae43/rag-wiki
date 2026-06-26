@@ -20,7 +20,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from rag_wiki.db.models.graph import Entity
+from rag_wiki.db.models.graph import Entity, Relation
 from rag_wiki.exceptions import DatabaseError
 from rag_wiki.providers.base import EmbeddingProvider
 from rag_wiki.retrieval.schemas import SeedResult, StructuralAnchor
@@ -108,8 +108,10 @@ async def find_seeds(
             result = await db.execute(
                 sa.select(Entity)
                 .options(
-                    joinedload(Entity.outgoing_relations),
-                    joinedload(Entity.incoming_relations),
+                    joinedload(Entity.outgoing_relations).joinedload(Relation.target_entity),
+                    joinedload(Entity.incoming_relations).joinedload(Relation.source_entity),
+                    joinedload(Entity.outgoing_relations).joinedload(Relation.source_entity),
+                    joinedload(Entity.incoming_relations).joinedload(Relation.target_entity),
                 )
                 .where(Entity.id.in_(seed_entity_ids))
             )
@@ -142,8 +144,10 @@ async def find_seeds(
         result = await db.execute(
             sa.select(Entity)
             .options(
-                joinedload(Entity.outgoing_relations),
-                joinedload(Entity.incoming_relations),
+                joinedload(Entity.outgoing_relations).joinedload(Relation.target_entity),
+                joinedload(Entity.incoming_relations).joinedload(Relation.source_entity),
+                joinedload(Entity.outgoing_relations).joinedload(Relation.source_entity),
+                joinedload(Entity.incoming_relations).joinedload(Relation.target_entity),
             )
             .where(Entity.embedding.is_not(None))
             .order_by(Entity.embedding.cosine_distance(query_embedding))
