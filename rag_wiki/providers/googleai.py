@@ -62,24 +62,17 @@ class GoogleAIProvider(EmbeddingProvider):
 
         url = f"{self.BASE_URL}/models/{model}:batchEmbedContents"
 
-        requests_data = [
-            {
+        requests_data: list[dict[str, Any]] = []
+        for text in texts:
+            req: dict[str, Any] = {
                 "model": f"models/{model}",
                 "content": {"parts": [{"text": text}]},
             }
-            for text in texts
-        ]
+            if self._settings.send_dimensions and self._settings.embedding_dimensions:
+                req["outputDimensionality"] = self._settings.embedding_dimensions
+            requests_data.append(req)
 
         body: dict[str, Any] = {"requests": requests_data}
-
-        if self._settings.send_dimensions:
-            config: dict[str, Any] = {}
-            if self._settings.embedding_dimensions:
-                config["outputDimensionality"] = self._settings.embedding_dimensions
-            if self._settings.embedding_task_type:
-                config["taskType"] = self._settings.embedding_task_type
-            if config:
-                body["embedContentConfig"] = config
 
         headers = {"x-goog-api-key": self._api_key}
         params = {"key": self._api_key}
