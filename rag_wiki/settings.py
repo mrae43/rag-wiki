@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     embedding_model: str = "gemini-embedding-2"
     embedding_dimensions: int = 3072
     send_dimensions: bool = True
+    gemini_api_key: str | None = None
+    embedding_task_type: str = "RETRIEVAL_DOCUMENT"
 
     # Entity resolution
     entity_resolution_top_k: int = 5

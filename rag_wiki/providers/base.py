@@ -49,6 +49,7 @@ class CompletionRequest(BaseModel):
     temperature: float | None = None
     timeout_ms: int | None = None
     tools: list[ToolDefinition] | None = None
+    tool_choice: str | None = None
 
 
 class CompletionResponse(BaseModel):
@@ -110,7 +111,11 @@ class EmbeddingProvider(Protocol):
     Separated from ChatProvider because not all providers offer embeddings.
     """
 
-    async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+    async def embed(
+        self,
+        texts: list[str],
+        model: str,
+    ) -> list[list[float]]:
         """
         Return embedding vectors for the given texts.
 

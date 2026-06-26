@@ -99,6 +99,7 @@ async def extract_entities(
         ],
         model=model,
         tools=[EXTRACTION_TOOL],
+        tool_choice="extract_entities_and_relations",
     )
 
     response = await provider.complete(request)

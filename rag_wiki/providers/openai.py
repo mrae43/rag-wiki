@@ -107,6 +107,11 @@ class OpenAIProvider(ChatProvider, EmbeddingProvider):
             kwargs["temperature"] = request.temperature
         if request.timeout_ms is not None:
             kwargs["timeout"] = request.timeout_ms / 1000.0
+        if request.tool_choice is not None and tools:
+            kwargs["tool_choice"] = {
+                "type": "function",
+                "function": {"name": request.tool_choice},
+            }
 
         try:
             raw = await self._client.chat.completions.create(**kwargs)
@@ -178,7 +183,11 @@ class OpenAIProvider(ChatProvider, EmbeddingProvider):
         content = raw.choices[0].message.content
         return content or ""
 
-    async def embed(self, texts: list[str], model: str) -> list[list[float]]:
+    async def embed(
+        self,
+        texts: list[str],
+        model: str,
+    ) -> list[list[float]]:
         """Return embeddings via the OpenAI embedding API."""
         kwargs: dict[str, Any] = {"model": model, "input": texts}
         if self._settings.send_dimensions and self._settings.embedding_dimensions:
