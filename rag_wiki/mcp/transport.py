@@ -13,6 +13,7 @@ import sys
 from typing import Literal
 
 import structlog
+from pydantic import AnyHttpUrl
 
 from rag_wiki.mcp.server import create_mcp_server
 from rag_wiki.settings import get_settings
@@ -57,6 +58,8 @@ def run(
     _transport = transport if transport is not None else settings.mcp_transport
     _host = host if host is not None else settings.mcp_host
     _port = port if port is not None else settings.mcp_port
+    if api_url is not None:
+        settings.mcp_api_url = AnyHttpUrl(api_url)
 
     server = create_mcp_server(settings=settings)
     if _transport == "http":
