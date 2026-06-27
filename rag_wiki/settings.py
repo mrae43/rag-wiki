@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -85,6 +86,12 @@ class Settings(BaseSettings):
     s3_access_key_id: str = ""
     s3_secret_access_key: str = ""
     s3_region: str = "us-east-1"
+
+    # MCP server
+    mcp_transport: Literal["stdio", "http"] = "stdio"
+    mcp_api_url: AnyHttpUrl = "http://127.0.0.1:8000"  # type: ignore[assignment]
+    mcp_host: str = "127.0.0.1"
+    mcp_port: int | None = None
 
     # Logging
     log_level: str = "INFO"
