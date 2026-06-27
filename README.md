@@ -247,6 +247,82 @@ uv run uvicorn rag_wiki.main:app --host 0.0.0.0 --port 8000 --reload
 
 ---
 
+## MCP Server
+
+The **Model Context Protocol (MCP)** server exposes RagWiki's knowledge graph as
+callable tools that MCP hosts (Obsidian, Claude Desktop, VS Code) can discover
+and invoke. The MCP server is a thin proxy — it translates MCP JSON-RPC messages
+into HTTP calls to the RagWiki backend API.
+
+### Starting the server
+
+```bash
+# Default (stdio) — for Obsidian
+rag-wiki mcp serve
+
+# HTTP mode — for remote clients
+rag-wiki mcp serve --transport http --host 0.0.0.0 --port 3000
+
+# With custom backend URL
+rag-wiki mcp serve --api-url http://192.168.1.50:8000
+```
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MCP_TRANSPORT` | `stdio` | Transport protocol: `stdio` or `http` |
+| `MCP_API_URL` | `http://127.0.0.1:8000` | Backend API endpoint that tools proxy to |
+| `MCP_HOST` | `127.0.0.1` | HTTP bind host (only for `http` transport) |
+| `MCP_PORT` | *(none)* | HTTP bind port (required for `http` transport) |
+
+### Available tools
+
+| Tool | Description | Backend endpoint |
+|------|-------------|------------------|
+| `query_knowledge_graph` | Natural language query with LLM-synthesised answer | `POST /api/v1/queries` with `generate_answer: true` |
+| `retrieve_context` | Raw retrieval context without LLM answer | `POST /api/v1/queries` with `generate_answer: false` |
+
+Run `rag-wiki mcp serve --help` for full CLI options.
+
+### Obsidian setup
+
+Add the following to your Obsidian vault's `mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "rag-wiki": {
+      "command": "uv",
+      "args": ["run", "rag-wiki", "mcp", "serve"],
+      "env": {
+        "MCP_API_URL": "http://127.0.0.1:8000"
+      }
+    }
+  }
+}
+```
+
+Then install the [mcp-obsidian](https://github.com/MarkusSagen/mcp-obsidian)
+plugin and ensure the RagWiki backend API is running.
+
+### Testing with MCP Inspector
+
+```bash
+npx @modelcontextprotocol/inspector uv run rag-wiki mcp serve
+```
+
+For HTTP transport:
+
+```bash
+npx @modelcontextprotocol/inspector --transport http http://localhost:3000
+```
+
+See [`docs/mcp-reference.md`](docs/mcp-reference.md) for the full reference
+(architecture, best practices, implementation checklist).
+
+---
+
 ## Local development (without Docker)
 
 If you want to run the code directly on your host (e.g. for faster iteration or IDE debugging):

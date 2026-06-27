@@ -371,37 +371,37 @@ npx @modelcontextprotocol/inspector node mcp_server.js
 
 ---
 
-## 7. Implementation Checklist
+## 7. Implementation Status
 
-Use this as a step-by-step execution plan.
+Checklist annotated with actual implementation state and file path references.
 
 ### Phase 1 — MCP wrapper (stdio, Obsidian MVP)
 
-- [ ] Choose implementation language for wrapper (Python with `mcp` SDK or Node.js with `@modelcontextprotocol/sdk`)
-- [ ] Install MCP SDK and pin version in `requirements.txt` / `package.json`
-- [ ] Implement `query_knowledge_graph` tool with full JSON Schema
-- [ ] Implement HTTP client call to `POST /api/v1/queries` inside the tool handler
-- [ ] Map `QueryResponse` to MCP content blocks (text answer + raw JSON)
-- [ ] Implement error handling with `isError: true` responses
-- [ ] Configure `stderr` logging with a structured logger
-- [ ] Register `SIGTERM` handler for graceful shutdown
-- [ ] Test with MCP Inspector — verify `tools/list` and `tools/call`
-- [ ] Write `mcp-config.json` for Obsidian plugin configuration
-- [ ] Document the startup command with all required env vars
+- [x] **Language**: Python with FastMCP (`rag_wiki/mcp/server.py`)
+- [x] **Dependencies**: `fastmcp` pinned in `pyproject.toml`
+- [x] **`query_knowledge_graph` tool** with full JSON Schema (`rag_wiki/mcp/tools.py:83`)
+- [x] **HTTP client call** to `POST /api/v1/queries` (`rag_wiki/mcp/tools.py:29`, `_call_backend`)
+- [x] **Map `QueryResponse`** to MCP content blocks (`rag_wiki/mcp/tools.py:117-118`)
+- [x] **Error handling** with `isError: true` responses (`rag_wiki/mcp/errors.py`)
+- [x] **`stderr` logging** with structlog (`rag_wiki/mcp/transport.py:21-30`)
+- [ ] **`SIGTERM` handler** for graceful shutdown — NOT YET IMPLEMENTED
+- [ ] **Test with MCP Inspector** — MANUAL: `npx @modelcontextprotocol/inspector uv run rag-wiki mcp serve`
+- [x] **Startup command + env vars** documented (see README.md, `docs/mcp-reference.md` §8)
+- [x] **`mcp-config.json`** example for Obsidian (see README.md)
 
 ### Phase 2 — HTTP+SSE transport
 
-- [ ] Add HTTP+SSE transport alongside existing stdio handler
-- [ ] Expose server on configurable port (default: 3000)
-- [ ] Test HTTP transport with MCP Inspector (`--transport http`)
-- [ ] Validate that both transports use the same tool handler logic
+- [x] **HTTP+SSE transport** alongside stdio (`rag_wiki/mcp/transport.py:62-65`)
+- [x] **Configurable port** via `MCP_PORT` env var / `--port` CLI flag (`rag_wiki/settings.py:94`)
+- [ ] **Test HTTP transport** with MCP Inspector — MANUAL: `rag-wiki mcp serve --transport http --port 3000`
+- [x] **Both transports share** tool handler logic (`rag_wiki/mcp/tools.py:65`, `register_tools`)
 
 ### Phase 3 — Tool expansion
 
-- [ ] Add `retrieve_context` tool (`generate_answer: false`)
-- [ ] Add `compare_entities` tool (`query_type: "comparison"`)
-- [ ] Add `get_entity_context` tool (seed-first lookup)
-- [ ] Update tool descriptions and test each with MCP Inspector
+- [x] **`retrieve_context` tool** (`generate_answer: false`) (`rag_wiki/mcp/tools.py:120-156`)
+- [ ] **`compare_entities` tool** — NOT YET IMPLEMENTED
+- [ ] **`get_entity_context` tool** — NOT YET IMPLEMENTED
+- [ ] **Update tool descriptions** and test with MCP Inspector
 
 ### Phase 4 — Resources (optional, post-MVP)
 
