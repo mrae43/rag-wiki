@@ -138,6 +138,7 @@ config, no application code changes. (ADR-0015)
 | 0013 | API | FastAPI API surface for automation and integration |
 | 0014 | Planner | Ingest and query planner — classify documents/queries by confidence and density, route to optimal strategy and model |
 | 0015 | Storage | S3-compatible storage provider (SeaweedFS, MinIO); local default, s3 optional via config |
+| 0016 | MCP server | Python FastMCP wrapper, dual-transport (stdio+Streamable HTTP), HTTP proxy to existing FastAPI |
 
 ---
 
@@ -175,6 +176,12 @@ rag_wiki/
     base.py              # StorageProvider protocol
     local.py             # Local filesystem backend
     s3.py                # S3-compatible backend
+  mcp/                 # MCP server (FastMCP wrapper, stdio + Streamable HTTP)
+    __init__.py          # Exports create_mcp_server()
+    server.py            # FastMCP factory
+    tools.py             # Tool registration, backend proxy
+    transport.py         # run() entrypoint, transport dispatch
+    errors.py            # MCP error message formatter
   prompts/             # LLM prompt templates
   db/
     models/              # graph.py, wiki.py, jobs.py, source.py, index.py (Chunk lives here)
