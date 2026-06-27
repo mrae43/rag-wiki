@@ -19,6 +19,7 @@ import asyncio
 import mimetypes
 import uuid
 from pathlib import Path
+from typing import Literal
 
 import structlog
 import typer
@@ -95,6 +96,31 @@ def export() -> None:
     """Export wiki pages to local markdown files."""
     typer.echo("Export not yet implemented.")
     raise typer.Exit(1)
+
+
+mcp_app = typer.Typer(help="MCP server commands")
+app.add_typer(mcp_app, name="mcp")
+
+
+@mcp_app.command("serve")
+def mcp_serve(
+    transport: Literal["stdio", "http"] = typer.Option(
+        "stdio", "--transport", "-t", help="Transport: stdio or http"
+    ),
+    host: str = typer.Option(
+        "127.0.0.1", "--host", "-H", help="Bind host for HTTP transport"
+    ),
+    port: int | None = typer.Option(
+        None, "--port", "-p", help="Port for HTTP transport"
+    ),
+    api_url: str = typer.Option(
+        "http://127.0.0.1:8000", "--api-url", "-u", help="Backend API URL"
+    ),
+) -> None:
+    """Start the MCP server."""
+    from rag_wiki.mcp import run
+
+    run(transport=transport, host=host, port=port, api_url=api_url)
 
 
 if __name__ == "__main__":
