@@ -94,6 +94,7 @@ Enterprise knowledge bases contain sensitive documents — internal research, cu
 | OpenAI | Full implementation (chat + embeddings); GPT-4o, GPT-4o-mini, text-embedding-3-* |
 | Azure OpenAI | Used via the OpenAI provider with `base_url` + `api_version` |
 | Anthropic | Stub (`rag_wiki/providers/anthropic.py`); not yet implemented or registered |
+| Google AI (Gemini) | Embeddings implemented (`gemini-embedding-2`, `EMBEDDING_TASK_TYPE`); chat not yet implemented |
 | vLLM | Used via the OpenAI provider with custom `base_url` |
 | Ollama | Used via the OpenAI provider with custom `base_url` |
 

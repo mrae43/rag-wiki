@@ -31,3 +31,29 @@ real-world concepts (people, places, ideas); Relations represent how they connec
 An **entity** used as the starting point for a graph traversal during retrieval.
 Seeds are found by vector-similarity search of the user query against entity
 embeddings, or provided directly for entity navigation.
+
+### Planner
+Classifies documents (by density and content type) and queries (by intent and
+complexity), then routes each operation to the optimal processing strategy and
+model. Planner decisions are logged for provenance.
+
+### Provider
+An abstraction over LLM backends. **ChatProvider** handles text completions and
+image captioning; **EmbeddingProvider** handles text embeddings. Never call LLM
+SDKs directly outside `rag_wiki/providers/`.
+
+### Job / Queue
+A Postgres-native job queue (`jobs` table) using `SELECT FOR UPDATE SKIP LOCKED`
+for claiming. Interface: `enqueue()`, `claim_next()`, `complete_job()`,
+`fail_job()`, `release_claim_to_pending()`. The worker runs as a separate
+process (`rag_wiki.worker`).
+
+### Storage
+An abstraction over file storage. **LocalStorageProvider** (filesystem, default)
+and **S3StorageProvider** (S3-compatible backends like SeaweedFS / MinIO). Swap
+by configuration, no application code changes.
+
+### MCP Server
+A FastMCP wrapper that exposes RagWiki knowledge graph tools (query, retrieve)
+via stdio or Streamable HTTP for MCP hosts (Obsidian, Claude Desktop, VS Code).
+Proxies requests to the backend FastAPI.
