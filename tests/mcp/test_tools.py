@@ -162,6 +162,21 @@ class TestRetrieveContext:
                     )
                 assert "500" in str(excinfo.value)
 
+    async def test_handles_http_422(self, settings: Settings) -> None:
+        async def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(422, json={"error": "Unprocessable"})
+
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as http_client:
+            server = create_mcp_server(settings=settings, http_client=http_client)
+            async with Client(server) as client:
+                with pytest.raises(ToolError) as excinfo:
+                    await client.call_tool(
+                        "retrieve_context",
+                        {"query": "who?"},
+                    )
+                assert "422" in str(excinfo.value)
+
     async def test_has_description(self, mcp_server: FastMCP) -> None:
         tools = await mcp_server.list_tools()
         tool = next(t for t in tools if t.name == "retrieve_context")
