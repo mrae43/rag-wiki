@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 import structlog
@@ -22,6 +22,10 @@ from fastmcp import FastMCP
 
 from rag_wiki.mcp.errors import backend_error_message
 from rag_wiki.settings import Settings
+
+QueryTypeLiteral = Literal[
+    "factual_lookup", "relationship_query", "summarization", "comparison"
+]
 
 logger = structlog.get_logger(__name__)
 
@@ -51,7 +55,6 @@ async def _call_backend(
         response = await client.post(
             url,
             json=body,
-            timeout=httpx.Timeout(None, connect=5.0, read=30.0, write=30.0, pool=5.0),
         )
         response.raise_for_status()
         data: dict[str, Any] = response.json()
@@ -92,6 +95,7 @@ def register_tools(
     )
     async def query_knowledge_graph(
         query: str,
+        query_type: QueryTypeLiteral | None = None,
         seed_entity_ids: list[str] | None = None,
         max_context_tokens: int | None = None,
     ) -> str:
@@ -100,6 +104,7 @@ def register_tools(
 
         Args:
             query: The user's question.
+            query_type: Optional query type override.
             seed_entity_ids: Optional entity UUIDs to narrow retrieval scope.
             max_context_tokens: Optional token budget for retrieved context.
 
@@ -110,8 +115,16 @@ def register_tools(
             "query": query,
             "generate_answer": True,
         }
+        if query_type is not None:
+            body["query_type"] = query_type
         if seed_entity_ids is not None:
-            body["seed_entity_ids"] = [uuid.UUID(e) for e in seed_entity_ids]
+            try:
+                body["seed_entity_ids"] = [uuid.UUID(e) for e in seed_entity_ids]
+            except ValueError:
+                raise ValueError(
+                    "Invalid UUID in seed_entity_ids. "
+                    "Each value must be a valid UUID string."
+                ) from None
         if max_context_tokens is not None:
             body["max_context_tokens"] = max_context_tokens
         result = await _call_backend(client, body, settings)
@@ -130,6 +143,7 @@ def register_tools(
     )
     async def retrieve_context(
         query: str,
+        query_type: QueryTypeLiteral | None = None,
         seed_entity_ids: list[str] | None = None,
         max_context_tokens: int | None = None,
     ) -> str:
@@ -138,6 +152,7 @@ def register_tools(
 
         Args:
             query: The user's question or search terms.
+            query_type: Optional query type override.
             seed_entity_ids: Optional entity UUIDs to narrow retrieval scope.
             max_context_tokens: Optional token budget for retrieved context.
 
@@ -148,9 +163,19 @@ def register_tools(
             "query": query,
             "generate_answer": False,
         }
+        if query_type is not None:
+            body["query_type"] = query_type
         if seed_entity_ids is not None:
-            body["seed_entity_ids"] = [uuid.UUID(e) for e in seed_entity_ids]
+            try:
+                body["seed_entity_ids"] = [uuid.UUID(e) for e in seed_entity_ids]
+            except ValueError:
+                raise ValueError(
+                    "Invalid UUID in seed_entity_ids. "
+                    "Each value must be a valid UUID string."
+                ) from None
         if max_context_tokens is not None:
             body["max_context_tokens"] = max_context_tokens
         result = await _call_backend(client, body, settings)
-        return json.dumps(result.get("retrieval", {}))
+        if "retrieval" not in result:
+            raise ValueError("Backend response is missing 'retrieval' field")
+        return json.dumps(result["retrieval"])
