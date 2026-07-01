@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class Message(BaseModel):
@@ -50,6 +50,14 @@ class CompletionRequest(BaseModel):
     timeout_ms: int | None = None
     tools: list[ToolDefinition] | None = None
     tool_choice: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_tools_require_user_message(self) -> CompletionRequest:
+        if self.tools and not any(m.role == "user" for m in self.messages):
+            raise ValueError(
+                "CompletionRequest with tools must include at least one user message"
+            )
+        return self
 
 
 class CompletionResponse(BaseModel):
