@@ -21,7 +21,7 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 - **Background job queue** — Postgres-native (`SELECT FOR UPDATE SKIP LOCKED`), durable and restart-safe, with a clear migration path to Celery/RQ
 - **Pluggable storage** — source files stored locally or on S3-compatible backends (SeaweedFS, MinIO); swap by config, no application code changes
 - **Self-hosted, enterprise-ready** — Docker Compose for small teams, Helm chart for production; single-tenant by design for data sovereignty
-- **Obsidian export** — *planned* — `rag-wiki export` will render wiki pages to a directory of `.md` files for graph-view browsing
+- **Obsidian export** — _planned_ — `rag-wiki export` will render wiki pages to a directory of `.md` files for graph-view browsing
 
 ---
 
@@ -89,14 +89,14 @@ Enterprise knowledge bases contain sensitive documents — internal research, cu
 
 ## Supported LLM providers
 
-| Provider | Notes |
-|---|---|---|
-| OpenAI | Full implementation (chat + embeddings); GPT-4o, GPT-4o-mini, text-embedding-3-* |
-| Azure OpenAI | Used via the OpenAI provider with `base_url` + `api_version` |
-| Anthropic | Stub (`rag_wiki/providers/anthropic.py`); not yet implemented or registered |
+| Provider           | Notes                                                                                          |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| OpenAI             | Full implementation (chat + embeddings); GPT-4o, GPT-4o-mini, text-embedding-3-\*              |
+| Azure OpenAI       | Used via the OpenAI provider with `base_url` + `api_version`                                   |
+| Anthropic          | Stub (`rag_wiki/providers/anthropic.py`); not yet implemented or registered                    |
 | Google AI (Gemini) | Embeddings implemented (`gemini-embedding-2`, `EMBEDDING_TASK_TYPE`); chat not yet implemented |
-| vLLM | Used via the OpenAI provider with custom `base_url` |
-| Ollama | Used via the OpenAI provider with custom `base_url` |
+| vLLM               | Used via the OpenAI provider with custom `base_url`                                            |
+| Ollama             | Used via the OpenAI provider with custom `base_url`                                            |
 
 Different operations can use different models — e.g. a cheap/fast model for captioning, a stronger model for wiki synthesis. Configured via env vars per operation.
 
@@ -219,25 +219,25 @@ uv run uvicorn rag_wiki.main:app --host 0.0.0.0 --port 8000 --reload
 
 ### Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `API_HOST` | `0.0.0.0` | Bind host |
-| `API_PORT` | `8000` | Bind port |
-| `UPLOAD_DIR` | `./uploads` | Directory for uploaded source files |
-| `UPLOAD_MAX_FILE_SIZE_BYTES` | `104857600` | Maximum upload size (100 MB) |
-| `CORS_ORIGINS` | `""` | Comma-separated allowed origins |
-| `STORAGE_PROVIDER` | `local` | `local` or `s3` (S3-compatible backends) |
-| `S3_BUCKET` | `rag-wiki` | S3 bucket name |
-| `S3_ENDPOINT_URL` | `""` | S3 endpoint (e.g. SeaweedFS, MinIO) |
-| `S3_ACCESS_KEY_ID` | `""` | S3 access key |
-| `S3_SECRET_ACCESS_KEY` | `""` | S3 secret key |
-| `S3_REGION` | `us-east-1` | S3 region |
-| `PLANNER_VERSION` | `1.0.0` | Planner version identifier |
-| `LLM_MODEL_QUERY_CLASSIFICATION` | `gpt-4o-mini` | Model for query intent classification |
-| `PLANNER_CONFIDENCE_HIGH` | `0.8` | Confidence threshold for direct execution |
-| `PLANNER_CONFIDENCE_LOW` | `0.5` | Confidence threshold for escalated depth |
-| `PLANNER_CONFIDENCE_MINIMUM` | `0.5` | Minimum confidence before halt |
-| `PLANNER_DENSITY_LARGE_THRESHOLD_BYTES` | `10485760` | File size threshold for "large" classification |
+| Variable                                | Default       | Description                                    |
+| --------------------------------------- | ------------- | ---------------------------------------------- |
+| `API_HOST`                              | `0.0.0.0`     | Bind host                                      |
+| `API_PORT`                              | `8000`        | Bind port                                      |
+| `UPLOAD_DIR`                            | `./uploads`   | Directory for uploaded source files            |
+| `UPLOAD_MAX_FILE_SIZE_BYTES`            | `104857600`   | Maximum upload size (100 MB)                   |
+| `CORS_ORIGINS`                          | `""`          | Comma-separated allowed origins                |
+| `STORAGE_PROVIDER`                      | `local`       | `local` or `s3` (S3-compatible backends)       |
+| `S3_BUCKET`                             | `rag-wiki`    | S3 bucket name                                 |
+| `S3_ENDPOINT_URL`                       | `""`          | S3 endpoint (e.g. SeaweedFS, MinIO)            |
+| `S3_ACCESS_KEY_ID`                      | `""`          | S3 access key                                  |
+| `S3_SECRET_ACCESS_KEY`                  | `""`          | S3 secret key                                  |
+| `S3_REGION`                             | `us-east-1`   | S3 region                                      |
+| `PLANNER_VERSION`                       | `1.0.0`       | Planner version identifier                     |
+| `LLM_MODEL_QUERY_CLASSIFICATION`        | `gpt-4o-mini` | Model for query intent classification          |
+| `PLANNER_CONFIDENCE_HIGH`               | `0.8`         | Confidence threshold for direct execution      |
+| `PLANNER_CONFIDENCE_LOW`                | `0.5`         | Confidence threshold for escalated depth       |
+| `PLANNER_CONFIDENCE_MINIMUM`            | `0.5`         | Minimum confidence before halt                 |
+| `PLANNER_DENSITY_LARGE_THRESHOLD_BYTES` | `10485760`    | File size threshold for "large" classification |
 
 ### Documentation
 
@@ -270,19 +270,19 @@ rag-wiki mcp serve --api-url http://192.168.1.50:8000
 
 ### Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MCP_TRANSPORT` | `stdio` | Transport protocol: `stdio` or `http` |
-| `MCP_API_URL` | `http://127.0.0.1:8000` | Backend API endpoint that tools proxy to |
-| `MCP_HOST` | `127.0.0.1` | HTTP bind host (only for `http` transport) |
-| `MCP_PORT` | *(none)* | HTTP bind port (required for `http` transport) |
+| Variable        | Default                 | Description                                    |
+| --------------- | ----------------------- | ---------------------------------------------- |
+| `MCP_TRANSPORT` | `stdio`                 | Transport protocol: `stdio` or `http`          |
+| `MCP_API_URL`   | `http://127.0.0.1:8000` | Backend API endpoint that tools proxy to       |
+| `MCP_HOST`      | `127.0.0.1`             | HTTP bind host (only for `http` transport)     |
+| `MCP_PORT`      | _(none)_                | HTTP bind port (required for `http` transport) |
 
 ### Available tools
 
-| Tool | Description | Backend endpoint |
-|------|-------------|------------------|
-| `query_knowledge_graph` | Natural language query with LLM-synthesised answer | `POST /api/v1/queries` with `generate_answer: true` |
-| `retrieve_context` | Raw retrieval context without LLM answer | `POST /api/v1/queries` with `generate_answer: false` |
+| Tool                    | Description                                        | Backend endpoint                                     |
+| ----------------------- | -------------------------------------------------- | ---------------------------------------------------- |
+| `query_knowledge_graph` | Natural language query with LLM-synthesised answer | `POST /api/v1/queries` with `generate_answer: true`  |
+| `retrieve_context`      | Raw retrieval context without LLM answer           | `POST /api/v1/queries` with `generate_answer: false` |
 
 Run `rag-wiki mcp serve --help` for full CLI options.
 
@@ -292,15 +292,15 @@ Add the following to your Obsidian vault's `mcp-config.json`:
 
 ```json
 {
-  "mcpServers": {
-    "rag-wiki": {
-      "command": "uv",
-      "args": ["run", "rag-wiki", "mcp", "serve"],
-      "env": {
-        "MCP_API_URL": "http://127.0.0.1:8000"
-      }
-    }
-  }
+	"mcpServers": {
+		"rag-wiki": {
+			"command": "uv",
+			"args": ["run", "rag-wiki", "mcp", "serve"],
+			"env": {
+				"MCP_API_URL": "http://127.0.0.1:8000"
+			}
+		}
+	}
 }
 ```
 
@@ -344,6 +344,14 @@ pytest --cov=rag_wiki --cov-fail-under=60
 
 > **Never mix host and container venvs.** The `Dockerfile` installs the venv at `/opt/venv` so the `docker-compose.yml` bind mount `.:/app` never overwrites it. If `.venv` is root-owned or points to `/usr/local/bin/python3`, it was contaminated by Docker. Delete it and recreate with `uv venv --python /usr/bin/python3`.
 
+If WSL or a previous root-owned install leaves `.venv` in a bad state, run:
+
+```bash
+./scripts/fix-venv.sh
+```
+
+This script repairs the environment as your normal WSL user and recreates `.venv` without requiring manual credential injection.
+
 ---
 
 ## Optional: full multimodal parsing (MinerU)
@@ -361,12 +369,15 @@ and markdown. The system runs fully without MinerU.
 ## Deployment
 
 ### Small team / single instance
+
 Docker Compose is the recommended path. Everything runs in one `docker-compose.yml`:
 API, worker, and Postgres. Suitable for a team of up to ~20 with moderate
 ingestion volume.
 
 ### Production / enterprise
-A Helm chart is *planned* for Kubernetes deployment with:
+
+A Helm chart is _planned_ for Kubernetes deployment with:
+
 - Multi-replica API and worker deployments
 - External managed Postgres (RDS, Cloud SQL, Supabase, etc.)
 - Config via Kubernetes Secrets / environment injection
@@ -387,40 +398,40 @@ single source of truth for the package layout and test mirroring conventions.
 
 ## Roadmap
 
-| Status | Item |
-|---|---|
-| ✅ Done | Architecture decisions (15 ADRs) |
-| ✅ Done | Coding standards, tech stack, agent guidance |
-| ✅ Done | Database schema + Alembic migrations |
-| ✅ Done | Lightweight parsing pipeline |
-| ✅ Done | Docker Compose stack |
-| ✅ Done | LLM provider abstraction + OpenAI implementation (Anthropic is a stub) |
-| ✅ Done | Entity/relation extraction + real-time resolution |
-| ✅ Done | Background job worker |
-| ✅ Done | Ingest pipeline orchestration (parse → chunk → embed → extract → resolve → enqueue wiki synthesis) |
-| ✅ Done | Hybrid retrieval (vector seed → graph traversal → context assembly) |
-| ✅ Done | Wiki page synthesis (entity pages + source summaries) |
-| ✅ Done | FastAPI endpoints |
-| 🔲 Planned | Auth / RBAC |
-| 🔲 Planned | Observability (structured logging, metrics) |
-| 🔲 Planned | Lint operation (periodic graph health check) |
-| 🔲 Planned | Obsidian export CLI |
-| 🔲 Planned | Optional MinerU multimodal path |
-| 🔲 Planned | Helm chart |
-| 🔲 Planned | Ingestion review queue (pending_review workflow) |
-| 🔲 Planned | Celery/RQ + Redis job queue migration path |
+| Status     | Item                                                                                               |
+| ---------- | -------------------------------------------------------------------------------------------------- |
+| ✅ Done    | Architecture decisions (15 ADRs)                                                                   |
+| ✅ Done    | Coding standards, tech stack, agent guidance                                                       |
+| ✅ Done    | Database schema + Alembic migrations                                                               |
+| ✅ Done    | Lightweight parsing pipeline                                                                       |
+| ✅ Done    | Docker Compose stack                                                                               |
+| ✅ Done    | LLM provider abstraction + OpenAI implementation (Anthropic is a stub)                             |
+| ✅ Done    | Entity/relation extraction + real-time resolution                                                  |
+| ✅ Done    | Background job worker                                                                              |
+| ✅ Done    | Ingest pipeline orchestration (parse → chunk → embed → extract → resolve → enqueue wiki synthesis) |
+| ✅ Done    | Hybrid retrieval (vector seed → graph traversal → context assembly)                                |
+| ✅ Done    | Wiki page synthesis (entity pages + source summaries)                                              |
+| ✅ Done    | FastAPI endpoints                                                                                  |
+| 🔲 Planned | Auth / RBAC                                                                                        |
+| 🔲 Planned | Observability (structured logging, metrics)                                                        |
+| 🔲 Planned | Lint operation (periodic graph health check)                                                       |
+| 🔲 Planned | Obsidian export CLI                                                                                |
+| 🔲 Planned | Optional MinerU multimodal path                                                                    |
+| 🔲 Planned | Helm chart                                                                                         |
+| 🔲 Planned | Ingestion review queue (pending_review workflow)                                                   |
+| 🔲 Planned | Celery/RQ + Redis job queue migration path                                                         |
 
 ---
 
 ## Design influences
 
 - **[LLM Wiki](https://github.com/karpathy)** (Andrej Karpathy) — the core
-  insight: an LLM-maintained wiki is a *compounding artifact*. Knowledge is
+  insight: an LLM-maintained wiki is a _compounding artifact_. Knowledge is
   compiled once and kept current, not re-derived on every query. The
   Ingest / Query / Lint operation model and the `index.md`/`log.md` pattern
   come from here.
-- **[RAG-Anything](https://github.com/HKUDS/RAG-Anything)** (*RAG-Anything:
-  All-in-One RAG Framework*) — multimodal document parsing, dual-graph
+- **[RAG-Anything](https://github.com/HKUDS/RAG-Anything)** (_RAG-Anything:
+  All-in-One RAG Framework_) — multimodal document parsing, dual-graph
   construction (knowledge graph + chunk-level), and hybrid graph+vector
   retrieval. This project adapts these ideas onto a Postgres-only backend.
 - **Building a Second Brain / CODE** (Tiago Forte) — Capture / Organize /
@@ -429,8 +440,8 @@ single source of truth for the package layout and test mirroring conventions.
   informs the entity resolution design (ADR-0008).
 - **Vannevar Bush's Memex (1945)** — a personal, curated knowledge store with
   associative trails between documents, where connections are as valuable as
-  documents themselves. The unsolved part of Bush's vision — *who does the
-  maintenance* — is what this project's LLM pipeline is designed to solve.
+  documents themselves. The unsolved part of Bush's vision — _who does the
+  maintenance_ — is what this project's LLM pipeline is designed to solve.
 
 ---
 
