@@ -113,6 +113,16 @@ class OpenAIProvider(ChatProvider, EmbeddingProvider):
                 "function": {"name": request.tool_choice},
             }
 
+        if tools and not any(m["role"] == "user" for m in messages):
+            logger.error(
+                "OpenAI completion request has tools but no user message",
+                model=request.model,
+            )
+            raise LLMProviderError(
+                "Tools provided but no user message in request: "
+                f"model={request.model!r}"
+            )
+
         try:
             raw = await self._client.chat.completions.create(**kwargs)
         except openai.APIError as exc:

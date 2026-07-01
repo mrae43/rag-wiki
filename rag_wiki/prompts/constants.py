@@ -34,6 +34,11 @@ Classify the following user query into exactly one of these types:
 
 Respond with JSON: {"type": "...", "confidence": 0.0-1.0, "rationale": "..."}"""
 
+RESOLUTION_INSTRUCTION = (
+    "You are an entity resolution engine. Decide whether an extracted entity "
+    "should be merged into an existing entity or created as a new one."
+)
+
 QUERY_SYSTEM_PROMPT = (
     "You are a helpful research assistant. Answer the user's question "
     "using only the retrieved context below. If the question is ambiguous "

@@ -33,10 +33,12 @@ from rag_wiki.exceptions import EntityResolutionError, ExtractionError, LLMProvi
 from rag_wiki.graph.merge import merge_entity
 from rag_wiki.graph.schemas import ExtractedEntity, ExtractedRelation, MergeDecision
 from rag_wiki.prompts import render_template
+from rag_wiki.prompts.constants import RESOLUTION_INSTRUCTION
 from rag_wiki.providers.base import (
     ChatProvider,
     CompletionRequest,
     EmbeddingProvider,
+    Message,
     ToolDefinition,
 )
 from rag_wiki.settings import get_settings
@@ -239,7 +241,8 @@ async def resolve_entities(
                     candidates=candidate_block,
                 )
                 request = CompletionRequest(
-                    system=prompt,
+                    system=RESOLUTION_INSTRUCTION,
+                    messages=[Message(role="user", content=prompt)],
                     model=settings.llm_model_resolution,
                     tools=[_MERGE_DECISION_TOOL],
                     tool_choice="merge_decision",
