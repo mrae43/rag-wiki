@@ -79,8 +79,8 @@ async def test_embed_sends_auth_headers() -> None:
         await provider.embed(["hello"], "gemini-embedding-2")
 
 
-async def test_embed_sends_dimensions_and_task_type() -> None:
-    """Test embed() sends outputDimensionality and taskType."""
+async def test_embed_does_not_send_embed_content_config() -> None:
+    """Test embed() omits embedContentConfig (batchEmbedContents does not accept it)."""
     settings = _make_settings(
         send_dimensions=True,
         embedding_dimensions=768,
@@ -89,9 +89,7 @@ async def test_embed_sends_dimensions_and_task_type() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
-        config = body["embedContentConfig"]
-        assert config["outputDimensionality"] == 768
-        assert config["taskType"] == "RETRIEVAL_DOCUMENT"
+        assert "embedContentConfig" not in body
         return httpx.Response(
             200,
             json={"embeddings": [{"values": [0.1, 0.2, 0.3]}]},
@@ -103,8 +101,8 @@ async def test_embed_sends_dimensions_and_task_type() -> None:
         await provider.embed(["hello"], "gemini-embedding-2")
 
 
-async def test_embed_omits_config_when_send_dimensions_false() -> None:
-    """Test embed() omits embedContentConfig when send_dimensions is False."""
+async def test_embed_ignores_send_dimensions_setting() -> None:
+    """Test embed() ignores send_dimensions (batchEmbedContents rejects config)."""
     settings = _make_settings(send_dimensions=False)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -121,15 +119,13 @@ async def test_embed_omits_config_when_send_dimensions_false() -> None:
         await provider.embed(["hello"], "gemini-embedding-2")
 
 
-async def test_embed_omits_task_type_when_none() -> None:
-    """Test embed() omits taskType when embedding_task_type is empty string."""
+async def test_embed_omits_config_regardless_of_task_type() -> None:
+    """Test embed() omits embedContentConfig even when task type is set."""
     settings = _make_settings(embedding_task_type="")
 
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)
-        config = body.get("embedContentConfig", {})
-        assert "outputDimensionality" in config
-        assert "taskType" not in config
+        assert "embedContentConfig" not in body
         return httpx.Response(
             200,
             json={"embeddings": [{"values": [0.1, 0.2, 0.3]}]},
