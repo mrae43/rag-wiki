@@ -20,7 +20,7 @@ The Docker image is rebuilt to include PyMuPDF, enabling PDF ingestion.
 4. As a developer running the system, I want the system to authenticate with Google AI via the `x-goog-api-key` header (not `Authorization: Bearer`), so that authentication is compatible with the Google AI API's security model.
 5. As a developer, I want the `GoogleAIProvider` to implement only `EmbeddingProvider` and not `ChatProvider`, so that it is impossible to accidentally route chat traffic through Google AI.
 6. As a developer, I want embeddings to accept up to 100 texts per batch request via `batchEmbedContents`, so that multi-text embedding operations in the pipeline (e.g., resolution scoring) use a single API call.
-7. As a developer, I want the `outputDimensionality` parameter sent when `SEND_DIMENSIONS=true`, so that the returned embedding vector matches the configured `EMBEDDING_DIMENSIONS` value and is compatible with the pgvector column width.
+7. As a developer, I want the embedding vector dimensionality to match the configured `EMBEDDING_DIMENSIONS` value and be compatible with the pgvector column width. (Note: `batchEmbedContents` does not accept `outputDimensionality`; the model defaults to 3072 dimensions, matching the column.)
 8. As a developer, I want the `taskType` configurable via the `EMBEDDING_TASK_TYPE` env var, so that the embedding model's output is optimised for the correct use case (document storage or query) without code changes.
 9. As a developer, I want the Docker image rebuilt with PyMuPDF installed, so that PDF documents can be parsed during ingestion.
 10. As a developer, I want error responses from the Google AI API wrapped in `LLMProviderError`, so that the error handling contract is consistent across all providers.
@@ -64,13 +64,9 @@ It does NOT implement `complete()`, `caption_image()`, or any other `ChatProvide
 }
 ```
 
-- When `SEND_DIMENSIONS=true` and `embedding_dimensions > 0`, each request includes:
-  ```json
-  "embedContentConfig": {
-    "outputDimensionality": 3072,
-    "taskType": "RETRIEVAL_DOCUMENT"
-  }
-  ```
+- Note: The `batchEmbedContents` endpoint does not accept the `embedContentConfig`
+  block (which is only valid on the single `models.embedContent` endpoint). The
+  model defaults to 3072 dimensions, matching the pgvector column.
 - Response body:
   ```json
   {
@@ -124,8 +120,9 @@ Rebuild the `api` image: `docker compose build --no-cache api`. PyMuPDF is alrea
 ```
 LLM_EMBEDDING_PROVIDER=googleai
 EMBEDDING_DIMENSIONS=3072
-SEND_DIMENSIONS=true
-EMBEDDING_TASK_TYPE=RETRIEVAL_DOCUMENT
+# SEND_DIMENSIONS and EMBEDDING_TASK_TYPE are no-ops for Google AI —
+# the batchEmbedContents endpoint does not accept these. They still
+# apply to the OpenAI embedding provider.
 ```
 
 No `LLM_EMBEDDING_BASE_URL` is needed — the Google AI endpoint is fixed per-model.
@@ -136,7 +133,7 @@ No `LLM_EMBEDDING_BASE_URL` is needed — the Google AI endpoint is fixed per-mo
 
 - Tests the external behaviour of `GoogleAIProvider.embed()`: input texts → correct HTTP request construction → correct embedding vector extraction from mock API response
 - Tests the boundary: the provider raises `LLMProviderError` on non-2xx responses
-- Tests config wiring: `send_dimensions`, `embedding_dimensions`, `embedding_task_type` are correctly reflected in the request body
+- Tests config independence: `send_dimensions` and `embedding_task_type` are not sent to `batchEmbedContents` (the endpoint does not accept `embedContentConfig`)
 - Tests the `googleai` registration: `get_embedding_provider(Settings(llm_embedding_provider="googleai"))` returns a `GoogleAIProvider`
 - Does NOT make real HTTP calls — uses `httpx` mock transport or `respx` for transport-layer interception
 
