@@ -121,24 +121,24 @@ config, no application code changes. (ADR-0015)
 
 ## ADR index
 
-| ADR | Subsystem | Decision |
-|-----|-----------|----------|
-| 0001 | Knowledge graph | Relational tables (`entities`, `relations`) |
-| 0002 | Parsing | Hybrid pipeline (lightweight default + optional MinerU) |
-| 0003 | Embeddings | Caption-to-text, single vector space |
-| 0004 | Deployment | Single-tenant, per-customer |
-| 0005 | Job queue | Postgres-native (`jobs` table, SKIP LOCKED) |
-| 0006 | Wiki storage | Postgres `wiki_pages` table, file export optional |
-| 0007 | LLM calls | Thin `ChatProvider` + `EmbeddingProvider` protocols, no direct SDK imports outside providers/ |
-| 0008 | Entity resolution | Real-time (embedding + LLM) + periodic lint |
-| 0009 | Retrieval | Hybrid single-mode (vector seed + graph traversal) |
-| 0010 | Ingestion workflow | Fully automated; `status` column for future review queue |
-| 0011 | Parsing | MinerU primary parser (deferred); lightweight is default |
-| 0012 | Retrieval | Hybrid retrieval implementation — vector seed + CTE traversal + context assembly |
-| 0013 | API | FastAPI API surface for automation and integration |
-| 0014 | Planner | Ingest and query planner — classify documents/queries by confidence and density, route to optimal strategy and model |
-| 0015 | Storage | S3-compatible storage provider (SeaweedFS, MinIO); local default, s3 optional via config |
-| 0016 | MCP server | Python FastMCP wrapper, dual-transport (stdio+Streamable HTTP), HTTP proxy to existing FastAPI |
+| ADR  | Subsystem          | Decision                                                                                                             |
+| ---- | ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 0001 | Knowledge graph    | Relational tables (`entities`, `relations`)                                                                          |
+| 0002 | Parsing            | Hybrid pipeline (lightweight default + optional MinerU)                                                              |
+| 0003 | Embeddings         | Caption-to-text, single vector space                                                                                 |
+| 0004 | Deployment         | Single-tenant, per-customer                                                                                          |
+| 0005 | Job queue          | Postgres-native (`jobs` table, SKIP LOCKED)                                                                          |
+| 0006 | Wiki storage       | Postgres `wiki_pages` table, file export optional                                                                    |
+| 0007 | LLM calls          | Thin `ChatProvider` + `EmbeddingProvider` protocols, no direct SDK imports outside providers/                        |
+| 0008 | Entity resolution  | Real-time (embedding + LLM) + periodic lint                                                                          |
+| 0009 | Retrieval          | Hybrid single-mode (vector seed + graph traversal)                                                                   |
+| 0010 | Ingestion workflow | Fully automated; `status` column for future review queue                                                             |
+| 0011 | Parsing            | MinerU primary parser (deferred); lightweight is default                                                             |
+| 0012 | Retrieval          | Hybrid retrieval implementation — vector seed + CTE traversal + context assembly                                     |
+| 0013 | API                | FastAPI API surface for automation and integration                                                                   |
+| 0014 | Planner            | Ingest and query planner — classify documents/queries by confidence and density, route to optimal strategy and model |
+| 0015 | Storage            | S3-compatible storage provider (SeaweedFS, MinIO); local default, s3 optional via config                             |
+| 0016 | MCP server         | Python FastMCP wrapper, dual-transport (stdio+Streamable HTTP), HTTP proxy to existing FastAPI                       |
 
 ---
 
@@ -226,9 +226,11 @@ Run in order: `ruff check` → `ruff format` → `mypy` → `pytest`.
 All four must pass before considering a task done.
 
 **Before running `pytest`,** ensure all dependencies including dev tools are installed:
+
 ```
 uv sync --extra dev
 ```
+
 Do not use `pip install` for a missing test dependency — that means `--extra dev` was omitted from `uv sync`. Repeated ad-hoc `pip install` calls drift from the lockfile.
 
 ---
@@ -252,7 +254,14 @@ accidentally created as root (e.g. via Docker container, `sudo uv` install, or
 `sudo uv sync`). Fix:
 
 ```bash
-sudo rm -rf .venv && uv venv && uv sync --extra dev
+./scripts/fix-venv.sh
+```
+
+If you need to repair it manually, the equivalent is:
+
+```bash
+sudo chown -R "$(id -un)":"$(id -gn)" .venv
+rm -rf .venv && uv venv --python "$(command -v python3)" && uv sync --extra dev
 ```
 
 To prevent recurrence: ensure `uv` is installed under your user
