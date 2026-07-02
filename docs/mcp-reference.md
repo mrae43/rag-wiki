@@ -384,7 +384,7 @@ Checklist annotated with actual implementation state and file path references.
 - [x] **Map `QueryResponse`** to MCP content blocks (`rag_wiki/mcp/tools.py:117-118`)
 - [x] **Error handling** with `isError: true` responses (`rag_wiki/mcp/errors.py`)
 - [x] **`stderr` logging** with structlog (`rag_wiki/mcp/transport.py:21-30`)
-- [ ] **`SIGTERM` handler** for graceful shutdown — NOT YET IMPLEMENTED
+- [x] **`SIGTERM` handler** for graceful shutdown (`rag_wiki/mcp/server.py:42-48`)
 - [ ] **Test with MCP Inspector** — MANUAL: `npx @modelcontextprotocol/inspector uv run rag-wiki mcp serve`
 - [x] **Startup command + env vars** documented (see README.md, `docs/mcp-reference.md` §8)
 - [x] **`mcp-config.json`** example for Obsidian (see README.md)
