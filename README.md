@@ -322,6 +322,43 @@ npx @modelcontextprotocol/inspector --transport http http://localhost:3000
 See [`docs/mcp-reference.md`](docs/mcp-reference.md) for the full reference
 (architecture, best practices, implementation checklist).
 
+### Demo with VS Code Copilot Chat
+
+Configure VS Code Copilot Chat to spawn the RAG Wiki MCP server as a child
+process and query your knowledge graph directly from the chat panel.
+
+Open your VS Code `settings.json` (Command Palette → "Preferences: Open User
+Settings (JSON)") and add:
+
+```json
+{
+  "github.copilot.chat.mcpServers": {
+    "rag-wiki": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/rag-wiki", "rag-wiki", "mcp", "serve"],
+      "env": {
+        "MCP_API_URL": "http://localhost:8000"
+      }
+    }
+  }
+}
+```
+
+Replace `/path/to/rag-wiki` with the absolute path to your cloned repository.
+
+**Prerequisites:**
+
+1. The RagWiki backend must be running (`docker compose up -d` or the host-based
+   setup — see [Quickstart](#quickstart)).
+2. `uv` must be installed on the host and `uv sync --extra dev` must have been
+   run at least once in the repository root.
+3. The `.env` file must be present and configured (copy `.env.example` if needed).
+
+After saving `settings.json`, restart VS Code. Open the Copilot Chat panel
+(Ctrl+Shift+I or Cmd+Shift+I) and try a query like:
+
+> @rag-wiki What entities are in my knowledge graph?
+
 ---
 
 ## Local development (without Docker)

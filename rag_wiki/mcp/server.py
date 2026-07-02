@@ -10,6 +10,9 @@ transports — callers (transport.py, CLI) are responsible for that.
 
 from __future__ import annotations
 
+import asyncio
+import signal
+
 import httpx
 from fastmcp import FastMCP
 
@@ -38,4 +41,15 @@ def create_mcp_server(
     )
     mcp = FastMCP(name="RAG Wiki Knowledge Graph")
     register_tools(mcp, client, settings)
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        loop.add_signal_handler(
+            signal.SIGTERM,
+            lambda: asyncio.ensure_future(client.aclose()),
+        )
+
     return mcp
