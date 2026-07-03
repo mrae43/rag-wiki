@@ -117,6 +117,15 @@ by default (`STORAGE_PROVIDER=local`). An S3-compatible backend
 (`STORAGE_PROVIDER=s3`) is available via the `StorageProvider` protocol; swap by
 config, no application code changes. (ADR-0015)
 
+**Stage-1 deployment: trusted-clients-only** — the Backend ships unauthenticated,
+behind a reverse proxy on a private Tailscale network. No inbound auth code in
+rag_wiki; auth is owned by the future Interface App. Compose-on-VM topology
+(`deploy/docker-compose.prod.yml`), Caddy internal-CA TLS, GHCR image, manual-gated
+CI/CD, `pg_dump` backups. MCP is stdio-only in prod; MCP HTTP is hardened to
+loopback-only via a settings validator. Every Stage-2 enhancement (Helm chart,
+shared API key, auto-deploy, SeaweedFS, MCP HTTP service, observability stack)
+is additive — no Stage-1 artifact is rewritten. (ADR-0017)
+
 ---
 
 ## ADR index
@@ -139,6 +148,7 @@ config, no application code changes. (ADR-0015)
 | 0014 | Planner            | Ingest and query planner — classify documents/queries by confidence and density, route to optimal strategy and model |
 | 0015 | Storage            | S3-compatible storage provider (SeaweedFS, MinIO); local default, s3 optional via config                             |
 | 0016 | MCP server         | Python FastMCP wrapper, dual-transport (stdio+Streamable HTTP), HTTP proxy to existing FastAPI                       |
+| 0017 | Deployment         | Stage-1 Compose-on-VM topology, trusted-clients-only, manual-gated CI/CD, Tailscale-internal TLS, stdio-only MCP   |
 
 ---
 
