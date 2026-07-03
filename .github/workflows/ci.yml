@@ -1,14 +1,125 @@
 name: CI
 
-on: [push, pull_request]
+# Least privilege: nothing granted by default; elevated per job where needed.
+permissions: {}
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "alembic/**"
+      - "tests/**"
+      - "rag_wiki/**"
+      - ".github/workflows/ci.yml"
+      - "docs/ci-context.md"
+  push:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - "alembic/**"
+      - "tests/**"
+      - "rag_wiki/**"
+      - ".github/workflows/ci.yml"
+      - "docs/ci-context.md"
+  workflow_dispatch:
+
+# Doc-only changes (docs/**, *.md, context/**) do not trigger this workflow
+# except for ci-context.md and .github/workflows/**, which always trigger.
+# The explicit paths allowlist above achieves that by simply not listing
+# docs/** and *.md.
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PYTHON_VERSION: "3.12"
+  # Tests mock the ChatProvider / EmbeddingProvider / StorageProvider at the
+  # import level (see tests/conftest.py Fake* providers), so no real LLM keys
+  # are ever set in CI. DATABASE_URL is overridden per-job where a Postgres
+  # service container is attached.
+  DATABASE_URL: postgresql+asyncpg://rag_wiki:rag_wiki@localhost:5432/rag_wiki_test
+
 jobs:
-  quality:
+  # ----------------------------------------------------------------------- #
+  # lint — fail-fast gate. No services. Runs ruff check + ruff format check. #
+  # ----------------------------------------------------------------------- #
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+      - name: Ruff check
+        run: uv run ruff check --output-format=github .
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  # ----------------------------------------------------------------------- #
+  # typecheck — mypy against the package source. Depends on lint.            #
+  # ----------------------------------------------------------------------- #
+  typecheck:
+    name: Typecheck (mypy)
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Restore mypy cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .mypy_cache
+          key: mypy-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ hashFiles('uv.lock') }}-src-${{ hashFiles('rag_wiki/**/*.py', 'tests/**/*.py') }}
+          restore-keys: |
+            mypy-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ hashFiles('uv.lock') }}-
+            mypy-${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+      - name: Run mypy
+        run: uv run mypy .
+
+  # ----------------------------------------------------------------------- #
+  # test — pytest against pgvector/pg16 service container. Depends on lint.  #
+  # ----------------------------------------------------------------------- #
+  test:
+    name: Run unit tests
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -21,30 +132,164 @@ jobs:
           --health-cmd pg_isready
           --health-interval 5s
           --health-retries 5
-
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - run: pip install -e ".[dev]"
-      - run: ruff check --output-format=github .
-      - run: ruff format --check .
-      - run: mypy .
-      - run: pytest --cov=rag_wiki --cov-report=xml --cov-fail-under=60 --junitxml=results/test-results.xml
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+      - name: Run pytest
+        run: |
+          uv run pytest \
+            --cov=rag_wiki \
+            --cov-report=xml \
+            --cov-fail-under=60 \
+            --junitxml=results/test-results.xml
         env:
-          DATABASE_URL: postgresql+asyncpg://rag_wiki:rag_wiki@localhost:5432/rag_wiki_test
-
-      - uses: actions/upload-artifact@v7
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+      - name: Upload test results
         if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results
           path: results/test-results.xml
-
-      - uses: actions/upload-artifact@v7
+      - name: Upload coverage report
         if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage-report
           path: coverage.xml
+
+  # ----------------------------------------------------------------------- #
+  # migrations — alembic upgrade + drift check. Parallel to test/typecheck.  #
+  # ----------------------------------------------------------------------- #
+  migrations:
+    name: Check migrations (drift + upgrade + downgrade)
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: rag_wiki
+          POSTGRES_PASSWORD: rag_wiki
+          POSTGRES_DB: rag_wiki_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+      - name: Apply migrations (alembic upgrade head)
+        run: uv run alembic upgrade head
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+      - name: Detect model/migration drift (alembic check)
+        run: uv run alembic check
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+      - name: Verify downgrade path (pytest tests/db/test_migration.py)
+        run: uv run pytest tests/db/test_migration.py -v
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+  # ----------------------------------------------------------------------- #
+  # build-images — single shared image, buildx + GHA layer cache.             #
+  # Needs test + migrations (the heavy gates) before paying for a build.     #
+  # ----------------------------------------------------------------------- #
+  build-images:
+    name: Build image
+    needs: [test, migrations]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Build image (no push)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: false
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          load: true
+      - name: Export image artifact for scan job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: docker-image
+          path: /tmp/image.tar
+        # NOTE: build-push-action does not write a tar by default. The scan
+        # job re-runs buildx with cache-from so the image is reconstructed
+        # from the GHA cache cheaply — avoids a multi-GB artifact upload.
+
+  # ----------------------------------------------------------------------- #
+  # scan-images — Trivy vulnerability scan before any push to a registry.    #
+  # ----------------------------------------------------------------------- #
+  scan-images:
+    name: Scan image (Trivy)
+    needs: build-images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Rebuild image from cache for scanning
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: false
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          cache-from: type=gha
+          load: true
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@a9c7b0f06e461e9d4b4d1711f154ee024b8d7ab8 # v0.36.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          format: table
+          exit-code: "1"
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+# =========================================================================== #
+# Deferred (flagged in ci-context.md §10 / "not yet decided"):                #
+#   - push-images        : needs GHCR/registry creds + OIDC; add once registry  #
+#                         exists. Gate on `github.ref == 'refs/heads/main'`   #
+#                         or `startsWith(github.ref, 'refs/tags/v')`.         #
+#   - helm-lint/publish  : no chart in repo yet (no Chart.yaml). Revisit when  #
+#                         docs/adr/ mentions a chart.                         #
+#   - nightly [mineru]/[s3] smoke + SeaweedFS service container: optional-deps #
+#     smoke per ADR-0002/0015; defer until those extras have test coverage.    #
+#   - live-provider job   : gated on a secret, default runs stay mocked.       #
+#   - pip-audit           : third-party dependency audit (nightly).            #
+# =========================================================================== #
