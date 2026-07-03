@@ -2,8 +2,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AnyHttpUrl
+from pydantic import AnyHttpUrl, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Hostnames treated as loopback for the MCP HTTP transport hardening
+# (ADR-0017 §6). Binds to anything outside this set are rejected when
+# `mcp_transport == "http"` so an unauthenticated MCP HTTP endpoint can
+# never be exposed to the network.
+MCP_LOOPBACK_HOSTS: frozenset[str] = frozenset({"127.0.0.1", "::1", "localhost"})
 
 
 class Settings(BaseSettings):
@@ -101,6 +107,30 @@ class Settings(BaseSettings):
         env_file=".env",
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def _validate_mcp_http_loopback(self) -> "Settings":
+        """
+        Harden the MCP HTTP transport to loopback binds only.
+
+        ADR-0017 §6 / PRD-002 user story 13: when the MCP server runs over
+        HTTP it must bind to a loopback address so an unauthenticated MCP
+        endpoint is never reachable over the tailnet. stdio is a local-trust
+        transport and imposes no host constraint.
+
+        Raises:
+            ValueError: If ``mcp_transport == "http"`` and ``mcp_host`` is not
+                a loopback address (``127.0.0.1``, ``::1``, ``localhost``).
+        """
+        if self.mcp_transport == "http" and self.mcp_host not in MCP_LOOPBACK_HOSTS:
+            raise ValueError(
+                "MCP HTTP transport must bind to a loopback address "
+                f"(one of {sorted(MCP_LOOPBACK_HOSTS)}); got mcp_host="
+                f"{self.mcp_host!r}. Set MCP_TRANSPORT=stdio, or bind MCP_HOST "
+                "to 127.0.0.1 / ::1 / localhost. (ADR-0017 §6: unauthenticated "
+                "MCP HTTP must not be exposed to the network.)"
+            )
+        return self
 
 
 @lru_cache
