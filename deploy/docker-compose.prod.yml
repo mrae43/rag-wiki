@@ -1,0 +1,102 @@
+# =============================================================================
+# Stage-1 production compose — Compose-on-VM, trusted-clients-only.
+# ADR-0017 / PRD-002.
+# =============================================================================
+#
+# Four services: db, api, worker, caddy. No pgadmin, no SeaweedFS, no
+# --reload, no bind-mounts. The image is pulled from GHCR (never built on
+# the VM). `restart: unless-stopped` on every service.
+#
+# Usage (from this deploy/ directory):
+#   cp .env.example .env   # then edit .env (set POSTGRES_PASSWORD, LLM_API_KEY,
+#                          # GHCR_OWNER, IMAGE_TAG, TAILNET_HOST, ...)
+#   docker compose up -d
+#
+# Compose auto-discovers ./env (this directory) for `${VAR}` interpolation;
+# the same file is loaded into the api/worker containers via `env_file:`.
+# `DATABASE_URL` is assembled inline from POSTGRES_PASSWORD + the `db`
+# service host, so the operator sets one DB secret, not a connection string.
+#
+# Rollback: edit IMAGE_TAG in .env, re-run `docker compose up -d`.
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/${GHCR_OWNER}/rag-wiki:${IMAGE_TAG}
+    restart: unless-stopped
+    entrypoint: ["/app/docker-entrypoint.sh"]
+    command: ["uv", "run", "uvicorn", "rag_wiki.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    env_file: .env
+    environment:
+      # Assembled from the single DB secret so operators never hand-build
+      # a connection string. Overrides any DATABASE_URL in .env.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # Stage-1 storage: local filesystem on a named volume.
+      # (Stage-2 additive: swap to STORAGE_PROVIDER=s3 + SeaweedFS service.)
+      STORAGE_PROVIDER: local
+      UPLOAD_DIR: /var/lib/rag-wiki/uploads
+      # Locked down — the Interface App will call server-side (PRD-002 §11).
+      CORS_ORIGINS: ""
+    volumes:
+      - uploads:/var/lib/rag-wiki/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # python:3.12-slim has no curl/wget; use stdlib urllib (raises on non-2xx).
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    image: ghcr.io/${GHCR_OWNER}/rag-wiki:${IMAGE_TAG}
+    restart: unless-stopped
+    entrypoint: ["/app/docker-entrypoint.sh"]
+    command: ["uv", "run", "python", "-m", "rag_wiki.worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      STORAGE_PROVIDER: local
+      UPLOAD_DIR: /var/lib/rag-wiki/uploads
+      CORS_ORIGINS: ""
+    volumes:
+      - uploads:/var/lib/rag-wiki/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  uploads:
+  caddy_data:
+  caddy_config:

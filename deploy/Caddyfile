@@ -1,0 +1,23 @@
+# =============================================================================
+# Caddy reverse proxy — Tailscale-internal TLS (ADR-0017 §3 / PRD-002).
+# =============================================================================
+#
+# The site hostname is `rag-wiki.<tailnet>`. Set TAILNET_HOST in .env (e.g.
+# `tailnet-name.ts.net` or your MagicDNS tailnet domain). Caddy terminates
+# TLS with its internal CA — no public DNS, no open ports, no Let's
+# Encrypt account. Clients must trust Caddy's internal root (install once
+# into the OS trust store, or use Tailscale's built-in HTTPS by replacing
+# `tls internal` with the Tailscale DNS provider — additive, Stage-2).
+#
+# Caddy gates upstream routing on the /health endpoint: it will not forward
+# traffic to the api container until it reports healthy.
+
+rag-wiki.{$TAILNET_HOST} {
+	tls internal
+
+	reverse_proxy api:8000 {
+		health_uri      /health
+		health_interval 15s
+		health_timeout  5s
+	}
+}
