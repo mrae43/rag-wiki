@@ -57,3 +57,29 @@ by configuration, no application code changes.
 A FastMCP wrapper that exposes RagWiki knowledge graph tools (query, retrieve)
 via stdio or Streamable HTTP for MCP hosts (Obsidian, Claude Desktop, VS Code).
 Proxies requests to the backend FastAPI.
+
+## Roles
+
+### Backend (rag_wiki)
+The headless **AI system**: FastAPI + worker + MCP + Postgres. Owns the
+knowledge graph, retrieval, and synthesis. No user-facing UI; accessed via its
+API and MCP transport.
+_Avoid_: AI systems, this project, the backend service
+
+### Interface App
+A separate full-stack application that renders the wiki for end users and owns
+authentication. Calls the Backend's API server-side.
+_Avoid_: dedicated app, dedicated full-stack application, the interfaces
+
+### Client
+Any system that calls the Backend's API or MCP transport: an Interface App, an
+Obsidian plugin, an automation script, or a Copilot Chat session.
+_Avoid_: consumer, integrator
+
+## Relationships
+
+- A **Client** calls the **Backend (rag_wiki)** via its API or MCP transport.
+- An **Interface App** is a **Client** that additionally owns end-user
+  authentication; it proxies or gates access to the **Backend**.
+- The **Backend** does not authenticate **Clients** in Stage-1; isolation is
+  enforced by the network (trusted-clients-only).
