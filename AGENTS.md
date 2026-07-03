@@ -149,6 +149,7 @@ is additive — no Stage-1 artifact is rewritten. (ADR-0017)
 | 0015 | Storage            | S3-compatible storage provider (SeaweedFS, MinIO); local default, s3 optional via config                             |
 | 0016 | MCP server         | Python FastMCP wrapper, dual-transport (stdio+Streamable HTTP), HTTP proxy to existing FastAPI                       |
 | 0017 | Deployment         | Stage-1 Compose-on-VM topology, trusted-clients-only, manual-gated CI/CD, Tailscale-internal TLS, stdio-only MCP   |
+| 0018 | CI/Security        | Branch protection, release & security policy for the public portfolio repo (Rulesets, no-bypass, tag releases, Dependabot/CodeQL) |
 
 ---
 

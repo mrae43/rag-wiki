@@ -220,11 +220,31 @@ branches and invalidate purely on content change.
 
 ## 8. Branch protection (should match this file)
 
-- [ ] `lint`, `typecheck`, `test`, `migrations`, `build-images`,
-      `scan-images` are all **required status checks** on `main`.
-- [ ] Require branches to be up to date before merge.
+> **Policy owned by ADR-0018** — `docs/adr/0018-branch-protection-release-security-policy.md`.
+> That ADR records the *why* for the rules below (solo portfolio repo,
+> main-only branching, no admin bypass, Rulesets-over-classic-protection).
+> This section is the *what* the enforced ruleset must satisfy.
+
+- [ ] The six gate jobs are **required status checks** on `main`, matched by
+      their exact display `name:` strings (GitHub matches required checks by
+      `name:`, not job `id`): `Lint`, `Typecheck (mypy)`, `Run unit tests`,
+      `Check migrations (drift + upgrade + downgrade)`, `Build image`,
+      `Scan image (Trivy)`.
+- [ ] Require branches to be up to date before merge
+      (`strict_required_status_checks: true`).
 - [ ] Require the workflow to have run on the exact merge commit (no stale
       approvals on force-pushed branches).
+- [ ] PR required with 0 approving reviews (solo dev — see ADR-0018 §#2).
+- [ ] Squash merge only; merge commits and rebase merges disabled; `main`
+      enforces linear history (`non_fast_forward` rule).
+- [ ] Block force-push and branch deletion on `main`
+      (`update.allow_force_pushes=false` + `deletion` rule).
+- [ ] No admin bypass (`bypass_actors`/`bypass_teams` empty) — see ADR-0018 §#6
+      for the documented escape hatch (delete the ruleset via `gh api`).
+- [ ] Codified in-repo as `scripts/apply-branch-protection.sh` +
+      `.github/branch-ruleset.json` (idempotent `gh api` to `/rulesets`).
+- [ ] A second ruleset protects `v*.*.*` tags from force-push/deletion
+      (ADR-0018 §#14c; applied by the extended script in PR-F).
 
 ---
 
@@ -264,5 +284,30 @@ branches and invalidate purely on content change.
 >   runs `docker compose -f deploy/docker-compose.prod.yml pull && up -d
 >   --remove-orphans`. Auto-deploy on `main` is a Stage-2 trigger flip.
 >
+> **Implemented (no longer deferred) per ADR-0018:**
+> - Branch protection — codified as `scripts/apply-branch-protection.sh` +
+>   `.github/branch-ruleset.json`; enforced via GitHub Rulesets (no admin
+>   bypass). See §8 above and `docs/adr/0018-*.md`.
+> - Tag-triggered release pipeline — `.github/workflows/release.yml` (`v*.*.*`
+>   trigger, reusable `_build-scan-push.yml`); pushes `:v*.*.*` to GHCR and
+>   creates a GitHub Release. Realizes §2's intended tag trigger.
+> - `environment: production` on the `deploy` job — deploy secrets
+>   (`DEPLOY_*`) moved to environment-scoped. See §5 above.
+> - Dependabot (`.github/dependabot.yml`) — `pip` + `github-actions` +
+>   `docker` ecosystems, weekly. (If native `uv.lock` ecosystem support is
+>   unavailable, falls back to `pip` watching `pyproject.toml` only — verify
+>   at apply time.)
+> - CodeQL (`.github/workflows/codeql.yml`) — Python analysis on PR
+>   (paths-filtered to `rag_wiki/**`, `tests/**`, `pyproject.toml`,
+>   `uv.lock`) + weekly schedule.
+> - Push protection — verified in repo Settings → Code security at apply
+>   time (status field is blank in the `gh api` probe; secret scanning is
+>   already enabled).
+> - Repo toggles — auto-delete head branches = on; workflow permissions
+>   default = read.
+>
 > Still deferred: `helm-lint/publish`, nightly `[mineru]/[s3]` smoke +
-> SeaweedFS service container, `live-provider` job, `pip-audit`.
+> SeaweedFS service container, `live-provider` job, `pip-audit`, **signed
+> commit verification on `main` (ADR-0018 §#13 — Stage-2 enhancement)**,
+> **staging environment/branch (ADR-0017 §4 — additive overlay in
+> Stage-2)**.
