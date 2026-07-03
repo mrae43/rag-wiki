@@ -128,9 +128,6 @@ data/
 *.db
 *.sqlite3
 
-# Alembic local config (if it contains DB credentials)
-alembic.ini
-
 # Docker Compose local overrides
 docker-compose.override.yml
 
