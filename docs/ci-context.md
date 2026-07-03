@@ -256,3 +256,13 @@ branches and invalidate purely on content change.
 - Observability stack undecided — once chosen, add a CI check ensuring
   structured logging config doesn't silently break (e.g. schema validation
   on log format).
+
+> **Implemented (no longer deferred) per ADR-0017:**
+> - `push-images` — pushes `:latest` + `:sha-<short>` to GHCR on `main` push
+>   or `workflow_dispatch`, using the auto-provisioned `GITHUB_TOKEN`.
+> - `deploy` — `workflow_dispatch` only (manual-gate), SSHes to the VM and
+>   runs `docker compose -f deploy/docker-compose.prod.yml pull && up -d
+>   --remove-orphans`. Auto-deploy on `main` is a Stage-2 trigger flip.
+>
+> Still deferred: `helm-lint/publish`, nightly `[mineru]/[s3]` smoke +
+> SeaweedFS service container, `live-provider` job, `pip-audit`.
