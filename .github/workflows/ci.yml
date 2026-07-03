@@ -283,11 +283,71 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
 
+  # ----------------------------------------------------------------------- #
+  # push-images — push the scanned image to GHCR with :latest + :sha-<short>. #
+  # Main push OR workflow_dispatch only (never on PRs). ADR-0017 §4.          #
+  # ----------------------------------------------------------------------- #
+  push-images:
+    name: Push image to GHCR
+    needs: [scan-images]
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Compute short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - name: Login to GHCR
+        # Auto-provisioned GITHUB_TOKEN (ADR-0017 §5); no long-lived PAT.
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push image
+        # Image name is the literal `rag-wiki` (matches compose `image:` and
+        # GHCR package name). Owner namespace comes from github.repository_owner.
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/rag-wiki:latest
+            ghcr.io/${{ github.repository_owner }}/rag-wiki:sha-${{ env.SHORT_SHA }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ----------------------------------------------------------------------- #
+  # deploy — manual-gate only (workflow_dispatch). SSHes to the VM and runs   #
+  # `compose pull && up -d --remove-orphans`. ADR-0017 §4.                    #
+  # ----------------------------------------------------------------------- #
+  deploy:
+    name: Deploy to VM
+    needs: push-images
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: SSH to VM and roll the stack
+        # Pinned to v1.2.5 commit SHA (matches the file's SHA-pin convention).
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOY_PATH }}
+            docker compose -f deploy/docker-compose.prod.yml pull
+            docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
+
 # =========================================================================== #
 # Deferred (flagged in ci-context.md §10 / "not yet decided"):                #
-#   - push-images        : needs GHCR/registry creds + OIDC; add once registry  #
-#                         exists. Gate on `github.ref == 'refs/heads/main'`   #
-#                         or `startsWith(github.ref, 'refs/tags/v')`.         #
 #   - helm-lint/publish  : no chart in repo yet (no Chart.yaml). Revisit when  #
 #                         docs/adr/ mentions a chart.                         #
 #   - nightly [mineru]/[s3] smoke + SeaweedFS service container: optional-deps #
