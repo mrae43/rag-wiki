@@ -1,0 +1,22 @@
+{
+  "name": "tag-protection",
+  "target": "tag",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": ["v*.*.*"],
+      "exclude": []
+    }
+  },
+  "bypass_actors": [],
+  "rules": [
+    { "type": "deletion" },
+    {
+      "type": "update",
+      "parameters": {
+        "update_type": "push",
+        "allow_force_pushes": false
+      }
+    }
+  ]
+}
