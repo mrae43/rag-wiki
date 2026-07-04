@@ -4,19 +4,13 @@
   "enforcement": "active",
   "conditions": {
     "ref_name": {
-      "include": ["v*.*.*"],
+      "include": ["refs/tags/v*.*.*"],
       "exclude": []
     }
   },
   "bypass_actors": [],
   "rules": [
     { "type": "deletion" },
-    {
-      "type": "update",
-      "parameters": {
-        "update_type": "push",
-        "allow_force_pushes": false
-      }
-    }
+    { "type": "non_fast_forward" }
   ]
 }
