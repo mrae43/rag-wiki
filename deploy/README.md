@@ -323,7 +323,39 @@ container is restarted by the compose healthcheck (`GET /health`, a `SELECT 1`).
 
 ---
 
-## 8. Stage-2 (additive — no Stage-1 rewrite)
+## 8. Branch protection (repo-admin)
+
+Branch protection is codified in-repo for transparency and auditability
+(ADR-0018). The configuration is in two files:
+
+| File | Purpose |
+|------|---------|
+| `.github/branch-ruleset.json` | Human-readable ruleset definition (required PR, status checks, linear history, no force-push, no deletion, no admin bypass) |
+| `scripts/apply-branch-protection.sh` | Idempotent script that applies the ruleset via `gh api` to the GitHub Rulesets endpoint |
+
+### Prerequisites
+
+```bash
+gh auth refresh -h github.com -s admin:repo_hook
+```
+
+### Apply
+
+```bash
+# From the repo root:
+./scripts/apply-branch-protection.sh
+```
+
+The script auto-detects `owner`/`repo` from `git remote get-url origin`.
+Override with `GITHUB_OWNER` / `GITHUB_REPO` env vars. To force-update a
+specific ruleset by numeric ID, set `RULESET_ID`.
+
+A second ruleset protecting `v*.*.*` tags (no force-push, no deletion) is
+applied by the same script after PR-F extends it with tag-protection logic.
+
+---
+
+## 9. Stage-2 (additive — no Stage-1 rewrite)
 
 Every Stage-2 enhancement lands as a new file or service block; none of the
 Stage-1 artifacts in this directory are rewritten. See ADR-0017 §Consequences
