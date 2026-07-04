@@ -330,8 +330,9 @@ Branch protection is codified in-repo for transparency and auditability
 
 | File | Purpose |
 |------|---------|
-| `.github/branch-ruleset.json` | Human-readable ruleset definition (required PR, status checks, linear history, no force-push, no deletion, no admin bypass) |
-| `scripts/apply-branch-protection.sh` | Idempotent script that applies the ruleset via `gh api` to the GitHub Rulesets endpoint |
+| `.github/branch-ruleset.json` | Main branch ruleset definition (required PR, status checks, linear history, no force-push, no deletion, no admin bypass) |
+| `.github/tag-ruleset.json` | Tag-protection ruleset (`v*.*.*` — no force-push, no deletion) |
+| `scripts/apply-branch-protection.sh` | Idempotent script that applies both rulesets and repo toggles via `gh api` |
 
 ### Prerequisites
 
@@ -350,8 +351,10 @@ The script auto-detects `owner`/`repo` from `git remote get-url origin`.
 Override with `GITHUB_OWNER` / `GITHUB_REPO` env vars. To force-update a
 specific ruleset by numeric ID, set `RULESET_ID`.
 
-A second ruleset protecting `v*.*.*` tags (no force-push, no deletion) is
-applied by the same script after PR-F extends it with tag-protection logic.
+The script also applies a tag-protection ruleset (`v*.*.*` no force-push, no
+deletion) and repo-level toggles (auto-delete head branches = on, workflow
+permissions default = read, push-protection verify). Use `SKIP_TAG=1` or
+`SKIP_TOGGLES=1` to skip either step.
 
 ---
 
