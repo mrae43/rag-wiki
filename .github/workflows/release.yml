@@ -20,7 +20,7 @@ jobs:
   # ----------------------------------------------------------------------- #
   build-scan-push:
     name: Build, scan, and push release image
-    uses: ./.github/workflows/_build-scan-push.yml
+    uses: ./.github/workflows/build-scan-push.yml
     with:
       primary-tag: ${{ github.ref_name }}
     secrets: inherit
