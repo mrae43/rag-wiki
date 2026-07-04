@@ -180,22 +180,23 @@ if [ "${SKIP_TOGGLES:-}" != "1" ]; then
   echo ""
   echo "---"
   echo "Setting default workflow permissions = read..."
-  current_perms="$(gh api "/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/permissions" --jq '.default_workflow_permissions' 2>/dev/null || true)"
+  current_perms="$(gh api "/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/permissions/workflow" --jq '.default_workflow_permissions' 2>/dev/null || true)"
   echo "Current default workflow permissions: ${current_perms:-unknown}"
-  gh api --method PUT "/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/permissions" \
-    -f default_workflow_permissions="read" >/dev/null
-  echo "✅ default workflow permissions = read"
+  gh api --method PUT "/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/permissions/workflow" \
+    -f default_workflow_permissions="read" \
+    -F can_approve_pull_request_reviews=false >/dev/null
+  echo "✅ default workflow permissions = read (can_approve_pull_request_reviews=false)"
 
   # 3c. Verify push-protection status
   echo ""
   echo "---"
   echo "Verifying push-protection status..."
   secret_scanning="$(gh api "/repos/${GITHUB_OWNER}/${GITHUB_REPO}" --jq '.security_and_analysis.advanced_security.status' 2>/dev/null || true)"
-  push_protection="$(gh api "/repos/${GITHUB_OWNER}/${GITHUB_REPO}" --jq '.security_and_analysis.push_protection.status' 2>/dev/null || true)"
+  push_protection="$(gh api "/repos/${GITHUB_OWNER}/${GITHUB_REPO}" --jq '.security_and_analysis.secret_scanning_push_protection.status' 2>/dev/null || true)"
   secret_scanning_status="$(gh api "/repos/${GITHUB_OWNER}/${GITHUB_REPO}" --jq '.security_and_analysis.secret_scanning.status' 2>/dev/null || true)"
-  echo "  Secret scanning (push protection): ${secret_scanning:-not found}"
-  echo "  Push protection:                   ${push_protection:-not found}"
-  echo "  Secret scanning (alerts):          ${secret_scanning_status:-not found}"
+  echo "  Advanced security:            ${secret_scanning:-not found}"
+  echo "  Push protection:              ${push_protection:-not found}"
+  echo "  Secret scanning (alerts):     ${secret_scanning_status:-not found}"
   if [ "$push_protection" = "enabled" ]; then
     echo "✅ Push protection is enabled."
   else

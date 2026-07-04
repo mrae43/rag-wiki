@@ -13,6 +13,7 @@ Read these files first, every session, in this order:
 2. `docs/coding-standards.md` — docstrings, error handling, typing, logging, DB conventions. Non-negotiable.
 3. The ADR(s) relevant to the subsystem you are touching (see `docs/adr/`). If you are unsure which ADR applies, read `docs/adr/` index below.
 4. `docs/harness-engineering.md` — harness design principles for agent workflows (16-step blueprint).
+5. `.github/copilot-instruction.md` — git hygiene, commit message format, and PR conventions. Follow this file when creating any PR.
 
 If a task is ambiguous and no ADR covers it, **stop and ask** rather than
 inventing a solution that may conflict with a decision already made elsewhere.
