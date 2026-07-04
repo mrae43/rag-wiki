@@ -217,6 +217,35 @@ Or directly with `uvicorn`:
 uv run uvicorn rag_wiki.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
+### Endpoints
+
+All routes are mounted under `/api/v1` (except the health check at `/health`).
+
+| Resource       | Method | Path                              | Description                                              |
+| -------------- | ------ | --------------------------------- | -------------------------------------------------------- |
+| Health         | GET    | `/health`                         | Liveness/readiness probe                                 |
+| Sources        | POST   | `/api/v1/sources`                 | Upload a document and enqueue ingestion                  |
+| Sources        | GET    | `/api/v1/sources`                 | List sources (paginated, filterable)                     |
+| Sources        | GET    | `/api/v1/sources/{id}`            | Get a source by id                                       |
+| Sources        | DELETE | `/api/v1/sources/{id}`            | Delete a source and its uploaded file                    |
+| Sources        | GET    | `/api/v1/sources/{id}/chunks`     | List chunks for a source                                 |
+| Jobs           | GET    | `/api/v1/jobs`                    | List jobs (paginated, filterable)                        |
+| Jobs           | GET    | `/api/v1/jobs/{id}`               | Get a job by id                                          |
+| Entities       | GET    | `/api/v1/entities`                | List entities (paginated, filterable)                    |
+| Entities       | GET    | `/api/v1/entities/{id}`           | Get an entity by id                                      |
+| Entities       | GET    | `/api/v1/entities/{id}/relations` | List relations for an entity                             |
+| Entities       | GET    | `/api/v1/entities/{id}/wiki-page` | Get the entity's primary wiki page                       |
+| Relations      | GET    | `/api/v1/relations`               | List relations (paginated, filterable)                   |
+| Wiki Pages     | GET    | `/api/v1/wiki-pages`              | List wiki pages (paginated, filterable)                  |
+| Wiki Pages     | GET    | `/api/v1/wiki-pages/{id}`         | Get a wiki page by id                                    |
+| Wiki Pages     | GET    | `/api/v1/wiki-pages/slug/{slug}`  | Get a wiki page by slug                                  |
+| Wiki Pages     | GET    | `/api/v1/wiki-pages/{id}/mentions`| List entities that mention a page                        |
+| Queries        | POST   | `/api/v1/queries`                 | Hybrid retrieval with optional LLM answer                |
+
+Set `generate_answer: false` to retrieve structured context without spending
+tokens on an LLM answer. See `docs/api.md` for the full endpoint reference,
+including request/response schemas and examples.
+
 ### Configuration
 
 | Variable                                | Default       | Description                                    |
@@ -279,10 +308,10 @@ rag-wiki mcp serve --api-url http://192.168.1.50:8000
 
 ### Available tools
 
-| Tool                    | Description                                        | Backend endpoint                                     |
-| ----------------------- | -------------------------------------------------- | ---------------------------------------------------- |
-| `query_knowledge_graph` | Natural language query with LLM-synthesised answer | `POST /api/v1/queries` with `generate_answer: true`  |
-| `retrieve_context`      | Raw retrieval context without LLM answer           | `POST /api/v1/queries` with `generate_answer: false` |
+| Tool                    | Description                                        | Parameters                                                                                      | Backend endpoint                                     |
+| ----------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `query_knowledge_graph` | Natural language query with LLM-synthesised answer | `query` (str), `query_type`, `seed_entity_ids`, `max_context_tokens`                           | `POST /api/v1/queries` with `generate_answer: true`  |
+| `retrieve_context`      | Raw retrieval context without LLM answer           | `query` (str), `query_type`, `seed_entity_ids`, `max_context_tokens`                           | `POST /api/v1/queries` with `generate_answer: false` |
 
 Run `rag-wiki mcp serve --help` for full CLI options.
 
@@ -373,10 +402,10 @@ uv venv --python /usr/bin/python3
 uv sync --extra dev
 
 # 3. Run the quality gate
-ruff check .
-ruff format .
-mypy .
-pytest --cov=rag_wiki --cov-fail-under=60
+uv run ruff check .
+uv run ruff format .
+uv run mypy .
+uv run pytest --cov=rag_wiki --cov-fail-under=60
 ```
 
 > **Never mix host and container venvs.** The `Dockerfile` installs the venv at `/opt/venv` so the `docker-compose.yml` bind mount `.:/app` never overwrites it. If `.venv` is root-owned or points to `/usr/local/bin/python3`, it was contaminated by Docker. Delete it and recreate with `uv venv --python /usr/bin/python3`.
@@ -437,7 +466,7 @@ single source of truth for the package layout and test mirroring conventions.
 
 | Status     | Item                                                                                               |
 | ---------- | -------------------------------------------------------------------------------------------------- |
-| ✅ Done    | Architecture decisions (15 ADRs)                                                                   |
+| ✅ Done    | Architecture decisions (18 ADRs)                                                                   |
 | ✅ Done    | Coding standards, tech stack, agent guidance                                                       |
 | ✅ Done    | Database schema + Alembic migrations                                                               |
 | ✅ Done    | Lightweight parsing pipeline                                                                       |
@@ -491,10 +520,10 @@ Read before writing any code:
 3. `AGENTS.md` — if using an LLM coding agent (Claude Code, OpenCode, etc.)
 
 ```bash
-ruff check .    # lint
-ruff format .   # format
-mypy .          # type check
-pytest          # tests
+uv run ruff check .    # lint
+uv run ruff format .   # format
+uv run mypy .          # type check
+uv run pytest --cov=rag_wiki --cov-fail-under=60  # tests
 ```
 
 All four must pass before opening a PR.
