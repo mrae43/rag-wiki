@@ -18,7 +18,8 @@
 # JSON's "name" field) and updates it via PUT; creates via POST if none exists.
 #
 # Prerequisites:
-#   gh auth refresh -h github.com -s admin:repo_hook
+#   gh auth login (the `repo` scope is sufficient; `admin:repo_hook` is not
+#   required for ruleset or environment writes).
 #
 # Usage:
 #   ./scripts/apply-branch-protection.sh
