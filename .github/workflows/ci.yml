@@ -330,6 +330,7 @@ jobs:
     name: Deploy to VM
     needs: push-images
     if: github.event_name == 'workflow_dispatch'
+    environment: production
     runs-on: ubuntu-latest
     permissions:
       contents: read
