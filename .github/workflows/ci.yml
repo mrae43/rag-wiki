@@ -18,6 +18,11 @@ permissions: {}
       - "rag_wiki/**"
       - ".github/workflows/ci.yml"
       - "docs/ci-context.md"
+      # Infra / config / docs that otherwise leave PRs blocked under ruleset
+      # required_status_checks (ADR-0018 §#3). Keep narrow; widen deliberately.
+      - "AGENTS.md"
+      - ".github/*.json"
+      - "scripts/*.sh"
   push:
     branches: [main]
     paths:
@@ -32,10 +37,18 @@ permissions: {}
       - "rag_wiki/**"
       - ".github/workflows/ci.yml"
       - "docs/ci-context.md"
+      # Mirror pull_request set — direct pushes to main are blocked by the
+      # ruleset's `pull_request` rule anyway; kept for symmetry / future
+      # relaxation. Same narrow surface as pull_request above.
+      - "AGENTS.md"
+      - ".github/*.json"
+      - "scripts/*.sh"
   workflow_dispatch:
 
 # Doc-only changes (docs/**, *.md, context/**) do not trigger this workflow
-# except for ci-context.md and .github/workflows/**, which always trigger.
+# except for ci-context.md and .github/workflows/**, which always trigger,
+# plus a narrow infra/config set (AGENTS.md, .github/*.json, scripts/*.sh)
+# required to unblock ruleset-gated PRs (ADR-0018 §#3 required_status_checks).
 # The explicit paths allowlist above achieves that by simply not listing
 # docs/** and *.md.
 
