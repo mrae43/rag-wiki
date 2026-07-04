@@ -20,6 +20,9 @@ jobs:
   # ----------------------------------------------------------------------- #
   build-scan-push:
     name: Build, scan, and push release image
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/_build-scan-push.yml
     with:
       primary-tag: ${{ github.ref_name }}

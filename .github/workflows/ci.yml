@@ -304,6 +304,9 @@ jobs:
     name: Push image to GHCR
     needs: [scan-images]
     if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      packages: write
     uses: ./.github/workflows/_build-scan-push.yml
     with:
       primary-tag: latest
@@ -316,7 +319,7 @@ jobs:
   deploy:
     name: Deploy to VM
     needs: push-images
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     environment: production
     runs-on: ubuntu-latest
     permissions:
