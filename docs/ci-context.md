@@ -298,10 +298,9 @@ branches and invalidate purely on content change.
 >   creates a GitHub Release. Realizes §2's intended tag trigger.
 > - `environment: production` on the `deploy` job — deploy secrets
 >   (`DEPLOY_*`) moved to environment-scoped. See §5 above.
-> - Dependabot (`.github/dependabot.yml`) — `pip` + `github-actions` +
->   `docker` ecosystems, weekly. (If native `uv.lock` ecosystem support is
->   unavailable, falls back to `pip` watching `pyproject.toml` only — verify
->   at apply time.)
+> - Dependabot (`.github/dependabot.yml`) — `uv` + `github-actions` +
+>   `docker` ecosystems, weekly. (Native `uv.lock` ecosystem confirmed
+>   supported — uses `uv` ecosystem, not `pip`.)
 > - CodeQL (`.github/workflows/codeql.yml`) — Python analysis on PR
 >   (paths-filtered to `rag_wiki/**`, `tests/**`, `pyproject.toml`,
 >   `uv.lock`) + weekly schedule.
