@@ -35,8 +35,7 @@ ADR criteria:
 The decisions span four groups: **branching & merge policy** (#1–#6),
 **CI/CD pipeline** (#7–#8, #11, #14), **security & hygiene** (#9–#10, #13), and
 **documentation** (#12, this ADR). They are implemented across PR-B through
-PR-F and applied via repo-side actions R1–R5 (see the open handoff
-`HANDOFF-branch-protection-release-policy.md` for the live task table).
+PR-F and applied via repo-side actions R1–R5 (all completed).
 
 ## Decision
 

@@ -67,7 +67,7 @@ if [ -z "$GITHUB_OWNER" ] || [ -z "$GITHUB_REPO" ]; then
     exit 1
   fi
   GITHUB_OWNER="$(echo "$remote_url" | sed -nE 's#.*[:/]([^/]+)/([^/]+)(\.git)?$#\1#p')"
-  GITHUB_REPO="$(echo "$remote_url" | sed -nE 's#.*[:/]([^/]+)/([^/]+)(\.git)?$#\2#p')"
+  GITHUB_REPO="$(echo "$remote_url" | sed -nE 's#.*[:/]([^/]+)/([^/]+)(\.git)?$#\2#p' | sed 's/\.git$//')"
 fi
 
 if [ -z "$GITHUB_OWNER" ] || [ -z "$GITHUB_REPO" ]; then
