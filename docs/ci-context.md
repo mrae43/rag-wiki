@@ -43,7 +43,7 @@ These are the non-negotiables the workflow should satisfy, in priority order:
 |---|---|
 | `pull_request` → `main` | Full validation gate (lint, typecheck, test, build — no push/deploy) |
 | `push` → `main` | Same validation + build & push Docker images (tag: `sha`, `latest`) |
-| `push` tag `v*.*.*` | Full validation + build, push, and tag release images; trigger Helm chart version bump |
+| `push` tag `v*.*.*` | Build, scan, push `:v*.*.*` image + create GitHub Release (`.github/workflows/release.yml` per ADR-0018 §#11); Helm chart version bump deferred |
 | `workflow_dispatch` | Manual re-run / manual deploy trigger for a given environment |
 | `schedule` (nightly, optional) | Slow checks not worth running per-PR: dependency audit, MinerU optional-path tests |
 
