@@ -172,6 +172,7 @@ rag_wiki/
   providers/           # ChatProvider + EmbeddingProvider implementations
     base.py              # Protocols (ChatProvider, EmbeddingProvider, data models)
     openai.py            # Full implementation (complete, embed, caption_image)
+    googleai.py          # EmbeddingProvider implementation (Gemini embeddings, REST API)
     anthropic.py         # Stub — TODO (#TODO comment, no code)
     __init__.py          # Retry wrapper, provider registry, get_chat_provider()
   ingest/              # Parse → chunk → caption → embed → extract → resolve pipeline
@@ -210,6 +211,8 @@ tests/
   api/                 # API route tests
   planner/
   storage/
+  mcp/                 # MCP server tests
+  settings/            # Settings/configuration tests
   conftest.py            # Shared fixtures
   test_smoke.py          # Top-level smoke tests
 ```
