@@ -182,6 +182,11 @@ version tags proceed to `push-images` / `helm-publish`.
 - Secrets (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, registry credentials,
   `S3_*` creds) live in GitHub Environments/Secrets, scoped to the job that
   needs them — the `lint`/`typecheck` jobs need none of these.
+- The `deploy` job uses a `production` GitHub Environment (restricted to
+  `main` branch, no required reviewers). Deploy secrets (`DEPLOY_SSH_KEY`,
+  `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`) are scoped to this environment,
+  not repo-level, so they are only accessible during a manual `workflow_dispatch`
+  deploy from `main`.
 - Per-operation model config (`LLM_MODEL_CAPTION`, `LLM_MODEL_EXTRACTION`,
   etc. per ADR-0007) should point at cheap/mock models in CI, never
   production-tier models, to keep the pipeline fast and cheap. Real LLM
