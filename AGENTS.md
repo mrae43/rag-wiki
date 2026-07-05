@@ -143,6 +143,19 @@ loopback-only via a settings validator. Every Stage-2 enhancement (Helm chart,
 shared API key, auto-deploy, SeaweedFS, MCP HTTP service, observability stack)
 is additive — no Stage-1 artifact is rewritten. (ADR-0017)
 
+**User-agnostic Backend** — no `created_by` columns on any table, no `X-User-Id`
+header, no `users` table. The Interface App owns all user-specific state (auth,
+query history, bookmarks, user→source_id mappings) in its own data store. The
+Backend's `/sources` and `/jobs` list endpoints stay flat (no user filter); the
+app fetches by the IDs it remembers per user. If user attribution becomes a real
+Backend need, a future ADR adds it additively — do not add `created_by` columns
+unilaterally. (ADR-0021)
+
+**Interface App is a separate project** — its own repo, different tech stack
+(likely TypeScript + Vue/React), deployed independently. No frontend code, UI
+templates, or JS/TS ever enters this repo. The two systems share only
+PostgreSQL. This repo builds the headless Backend only. (ADR-0021)
+
 ---
 
 ## ADR index
@@ -169,6 +182,10 @@ is additive — no Stage-1 artifact is rewritten. (ADR-0017)
 | 0018 | CI/Security        | Branch protection, release & security policy for the public portfolio repo (Rulesets, no-bypass, tag releases, Dependabot/CodeQL) |
 | 0019 | Wiki export        | Adopt OKF (Open Knowledge Format) as the `rag-wiki export` format — export-only, Postgres stays SoT; front-matter set, flat directory, inline `[[slug]]` rewrite, manifest-based `log.md`, per-page atomic writes |
 | 0020 | Graph analysis     | Transient networkx Graph View + per-run snapshot tables (`graph_analysis_runs`, `community_summaries`, `community_members`, `surprising_connections`); manual CLI trigger, full re-cluster, coexists with retrieval CTE; FastAPI read endpoints in v1, MCP deferred to Phase B |
+| 0021 | Interface App      | Backend↔Interface App contract — user-agnostic Backend (no `created_by`, no `users` table; app owns auth + user state), HTTP-API-only in prod (confirms ADR-0017 §6), poll-based updates, `progress` JSONB on `jobs`, `/search` FTS endpoint, `/graph` whole-graph dump endpoint |
+| 0022 | Query              | SSE streaming — `complete_stream()` async generator on `ChatProvider` (extends ADR-0007) + `POST /api/v1/queries/stream`; sync endpoint stays for MCP; shared `run_query()` pipeline. Resolves ADR-0013's deferred streaming |
+| 0023 | Export             | Export API + generalized `GET /api/v1/jobs/{job_id}/artifact` download — revisits ADR-0019 §9 (CLI-only → add `export_bundle` job + `POST/GET /api/v1/export`); on-the-fly tar.gz stream; one download path for all artifact-producing jobs |
+| 0024 | Output generation  | Generated Output pipeline — `generate_output` job (LLM slide synthesis, separate from `export_bundle`); input mirrors `/queries` reusing `retrieve()`; one slide spec → PPTX (`python-pptx`) + HTML carousel (Jinja2); shared artifact download (ADR-0023) |
 
 ---
 

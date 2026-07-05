@@ -16,13 +16,13 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 - **Hybrid retrieval** — vector similarity (pgvector) seeds a graph traversal (recursive CTE) for richer, context-aware answers
 - **Intelligent planner** — classifies queries and documents by confidence and density, routes each operation to the optimal processing strategy and model
 - **LLM-maintained wiki** — markdown pages synthesized and kept current in Postgres during ingestion; optional OKF (Open Knowledge Format) bundle export to `.md` files for Obsidian/agent browsing
-- **Graph analysis** — community detection, PageRank (god nodes), cohesion scoring, and surprising-connection detection via transient networkx Graph View, persisted to per-run snapshot tables
+- **Graph analysis** — community detection, PageRank (god nodes), cohesion scoring, and surprising-connection detection via transient networkx Graph View, persisted to per-run snapshot tables (ADR-0020 — accepted, not yet implemented)
 - **Pluggable LLM providers** — OpenAI (fully implemented); Google Gemini (embeddings implemented); Anthropic (stub); Azure OpenAI, vLLM, and Ollama via the OpenAI provider with `base_url` config — swap by config, no code changes
 - **Single Postgres backend** — vectors, knowledge graph, job queue, and wiki pages all in one database; no Redis, no Neo4j, no separate vector store
 - **Background job queue** — Postgres-native (`SELECT FOR UPDATE SKIP LOCKED`), durable and restart-safe, with a clear migration path to Celery/RQ
 - **Pluggable storage** — source files stored locally or on S3-compatible backends (SeaweedFS, MinIO); swap by config, no application code changes
-- **Self-hosted, enterprise-ready** — Docker Compose for small teams, Helm chart for production; single-tenant by design for data sovereignty
-- **OKF export** — _planned_ — `rag-wiki export` renders wiki pages to an Open Knowledge Format (OKF) bundle: front-matter, flat `entities/`+`sources/` layout, inline `[[slug]]`→Markdown link rewrite, `index.md`+`log.md`, manifest-based diff (ADR-0019)
+- **Self-hosted, enterprise-ready** — Docker Compose for small teams; single-tenant by design for data sovereignty
+- **OKF export** — _planned_ — `rag-wiki export` will render wiki pages to an Open Knowledge Format (OKF) bundle: front-matter, flat `entities/`+`sources/` layout, inline `[[slug]]`→Markdown link rewrite, `index.md`+`log.md`, manifest-based diff (ADR-0019 — accepted, CLI is a stub)
 
 ---
 
@@ -124,8 +124,8 @@ Choose the setup path that fits your environment:
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/your-username/llm-rag-wiki.git
-cd llm-rag-wiki
+git clone https://github.com/your-org/rag-wiki.git
+cd rag-wiki
 cp .env.example .env
 ```
 
@@ -142,7 +142,7 @@ EMBEDDING_MODEL=gemini-embedding-2
 EMBEDDING_DIMENSIONS=3072
 ```
 
-See `.env.example` for the full list of 30+ config options (per-operation model
+See `.env.example` for the full list of 60+ config options (per-operation model
 selection, entity resolution, retrieval parameters, logging, etc.).
 
 ### 2. Start the stack
@@ -242,6 +242,14 @@ All routes are mounted under `/api/v1` (except the health check at `/health`).
 | Wiki Pages     | GET    | `/api/v1/wiki-pages/slug/{slug}`  | Get a wiki page by slug                                  |
 | Wiki Pages     | GET    | `/api/v1/wiki-pages/{id}/mentions`| List entities that mention a page                        |
 | Queries        | POST   | `/api/v1/queries`                 | Hybrid retrieval with optional LLM answer                |
+| Queries        | POST   | `/api/v1/queries/stream`          | SSE-streamed query (events: plan, retrieval, answer_chunk, done) — planned |
+| Search         | GET    | `/api/v1/search?q=`               | Full-text search over wiki pages + entities — planned     |
+| Graph          | GET    | `/api/v1/graph`                   | Whole-graph dump (nodes + edges, optional analysis enrichment) — planned |
+| Export         | POST   | `/api/v1/export`                  | Enqueue an OKF export bundle job — planned                |
+| Export         | GET    | `/api/v1/export/{id}`             | Poll export job status — planned                          |
+| Artifact       | GET    | `/api/v1/jobs/{id}/artifact`      | Download a job's file artifact (OKF bundle, PPTX, etc.) — planned |
+| Outputs        | POST   | `/api/v1/outputs`                 | Enqueue a generated output (PPTX/carousel) job — planned  |
+| Analysis       | GET    | `/api/v1/analysis/...`            | Graph analysis snapshot endpoints — planned               |
 
 Set `generate_answer: false` to retrieve structured context without spending
 tokens on an LLM answer. See `docs/api.md` for the full endpoint reference,
@@ -450,15 +458,11 @@ A Helm chart is _planned_ for Kubernetes deployment with:
 - Config via Kubernetes Secrets / environment injection
 - Horizontal scaling of workers for high ingestion throughput
 
-```bash
-helm install rag-wiki ./helm/rag-wiki -f values.yaml
-```
-
 ---
 
 ## Project structure
 
-[See `[#Project Structure]` in `AGENTS.md`](AGENTS.md#package-layout) — it is the
+[See the Package layout section in `AGENTS.md`](AGENTS.md#package-layout) — it is the
 single source of truth for the package layout and test mirroring conventions.
 
 ---
@@ -467,7 +471,7 @@ single source of truth for the package layout and test mirroring conventions.
 
 | Status     | Item                                                                                               |
 | ---------- | -------------------------------------------------------------------------------------------------- |
-| ✅ Done    | Architecture decisions (20 ADRs)                                                                   |
+| ✅ Done    | Architecture decisions (24 ADRs)                                                                   |
 | ✅ Done    | Coding standards, tech stack, agent guidance                                                       |
 | ✅ Done    | Database schema + Alembic migrations                                                               |
 | ✅ Done    | Lightweight parsing pipeline                                                                       |
@@ -495,7 +499,7 @@ single source of truth for the package layout and test mirroring conventions.
 
 ## Design influences
 
-- **[LLM Wiki](https://github.com/karpathy)** (Andrej Karpathy) — the core
+- **[LLM Wiki](https://github.com/karpathy/llm-wiki)** (Andrej Karpathy) — the core
   insight: an LLM-maintained wiki is a _compounding artifact_. Knowledge is
   compiled once and kept current, not re-derived on every query. The
   Ingest / Query / Lint operation model and the `index.md`/`log.md` pattern
