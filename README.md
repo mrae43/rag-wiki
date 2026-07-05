@@ -15,13 +15,14 @@ Most RAG systems rediscover knowledge from scratch on every query. **LLM RAG Wik
 - **Knowledge graph** — entities and relations extracted from every chunk, stored as plain relational tables in Postgres with real-time entity resolution
 - **Hybrid retrieval** — vector similarity (pgvector) seeds a graph traversal (recursive CTE) for richer, context-aware answers
 - **Intelligent planner** — classifies queries and documents by confidence and density, routes each operation to the optimal processing strategy and model
-- **LLM-maintained wiki** — markdown pages synthesized and kept current in Postgres during ingestion; optional export to a directory of `.md` files for Obsidian browsing is planned
-- **Pluggable LLM providers** — OpenAI (fully implemented); Anthropic (stub); Azure OpenAI, vLLM, and Ollama via the OpenAI provider with `base_url` config — swap by config, no code changes
+- **LLM-maintained wiki** — markdown pages synthesized and kept current in Postgres during ingestion; optional OKF (Open Knowledge Format) bundle export to `.md` files for Obsidian/agent browsing
+- **Graph analysis** — community detection, PageRank (god nodes), cohesion scoring, and surprising-connection detection via transient networkx Graph View, persisted to per-run snapshot tables
+- **Pluggable LLM providers** — OpenAI (fully implemented); Google Gemini (embeddings implemented); Anthropic (stub); Azure OpenAI, vLLM, and Ollama via the OpenAI provider with `base_url` config — swap by config, no code changes
 - **Single Postgres backend** — vectors, knowledge graph, job queue, and wiki pages all in one database; no Redis, no Neo4j, no separate vector store
 - **Background job queue** — Postgres-native (`SELECT FOR UPDATE SKIP LOCKED`), durable and restart-safe, with a clear migration path to Celery/RQ
 - **Pluggable storage** — source files stored locally or on S3-compatible backends (SeaweedFS, MinIO); swap by config, no application code changes
 - **Self-hosted, enterprise-ready** — Docker Compose for small teams, Helm chart for production; single-tenant by design for data sovereignty
-- **Obsidian export** — _planned_ — `rag-wiki export` will render wiki pages to a directory of `.md` files for graph-view browsing
+- **OKF export** — _planned_ — `rag-wiki export` renders wiki pages to an Open Knowledge Format (OKF) bundle: front-matter, flat `entities/`+`sources/` layout, inline `[[slug]]`→Markdown link rewrite, `index.md`+`log.md`, manifest-based diff (ADR-0019)
 
 ---
 
@@ -89,14 +90,14 @@ Enterprise knowledge bases contain sensitive documents — internal research, cu
 
 ## Supported LLM providers
 
-| Provider           | Notes                                                                                          |
-| ------------------ | ---------------------------------------------------------------------------------------------- |
-| OpenAI             | Full implementation (chat + embeddings); GPT-4o, GPT-4o-mini, text-embedding-3-\*              |
-| Azure OpenAI       | Used via the OpenAI provider with `base_url` + `api_version`                                   |
-| Anthropic          | Stub (`rag_wiki/providers/anthropic.py`); not yet implemented or registered                    |
-| Google AI (Gemini) | Embeddings implemented (`gemini-embedding-2`, `EMBEDDING_TASK_TYPE`); chat not yet implemented |
-| vLLM               | Used via the OpenAI provider with custom `base_url`                                            |
-| Ollama             | Used via the OpenAI provider with custom `base_url`                                            |
+| Provider           | Notes                                                                                               |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| OpenAI             | Full implementation (chat + embeddings); GPT-4o, GPT-4o-mini, text-embedding-3-\*                   |
+| Azure OpenAI       | Used via the OpenAI provider with `base_url` + `api_version`                                        |
+| Anthropic          | Stub (`rag_wiki/providers/anthropic.py`); not yet implemented or registered                         |
+| Google AI (Gemini) | Embeddings implemented (`gemini-embedding-2`); chat via Gemini not yet implemented                  |
+| vLLM               | Used via the OpenAI provider with custom `base_url`                                                 |
+| Ollama             | Used via the OpenAI provider with custom `base_url`                                                 |
 
 Different operations can use different models — e.g. a cheap/fast model for captioning, a stronger model for wiki synthesis. Configured via env vars per operation.
 
@@ -191,9 +192,9 @@ curl -X POST http://localhost:8000/api/v1/queries \
 Set `generate_answer: false` to retrieve structured context without spending
 tokens on an LLM answer. See `docs/api.md` for the full endpoint reference.
 
-### 6. Export to Obsidian (optional)
+### 6. Export OKF bundle (optional)
 
-> 🔲 **Export is not yet implemented.** The CLI stub exists but exits immediately. `rag-wiki export --output ./wiki` will render `.md` files for Obsidian.
+> 🔲 **Export is not yet implemented.** The CLI stub exists but exits immediately. `rag-wiki export --output ./wiki` will render an Open Knowledge Format (OKF) bundle — see ADR-0019.
 
 ---
 
@@ -466,7 +467,7 @@ single source of truth for the package layout and test mirroring conventions.
 
 | Status     | Item                                                                                               |
 | ---------- | -------------------------------------------------------------------------------------------------- |
-| ✅ Done    | Architecture decisions (18 ADRs)                                                                   |
+| ✅ Done    | Architecture decisions (20 ADRs)                                                                   |
 | ✅ Done    | Coding standards, tech stack, agent guidance                                                       |
 | ✅ Done    | Database schema + Alembic migrations                                                               |
 | ✅ Done    | Lightweight parsing pipeline                                                                       |
@@ -478,10 +479,13 @@ single source of truth for the package layout and test mirroring conventions.
 | ✅ Done    | Hybrid retrieval (vector seed → graph traversal → context assembly)                                |
 | ✅ Done    | Wiki page synthesis (entity pages + source summaries)                                              |
 | ✅ Done    | FastAPI endpoints                                                                                  |
+| ✅ Done    | ADR-0019: OKF export format design                                                                |
+| ✅ Done    | ADR-0020: Graph analysis layer design (community detection, PageRank, cohesion, surprising connections) |
 | 🔲 Planned | Auth / RBAC                                                                                        |
 | 🔲 Planned | Observability (structured logging, metrics)                                                        |
 | 🔲 Planned | Lint operation (periodic graph health check)                                                       |
-| 🔲 Planned | Obsidian export CLI                                                                                |
+| 🔲 Planned | OKF export CLI implementation (ADR-0019)                                                           |
+| 🔲 Planned | Graph analysis implementation + API endpoints (ADR-0020)                                           |
 | 🔲 Planned | Optional MinerU multimodal path                                                                    |
 | 🔲 Planned | Helm chart                                                                                         |
 | 🔲 Planned | Ingestion review queue (pending_review workflow)                                                   |
