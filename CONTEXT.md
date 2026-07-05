@@ -21,7 +21,17 @@ The exported, file-based rendering of the **Wiki** as a directory of markdown
 concept files, each with structured front-matter and markdown links to other
 concepts in the bundle. Derived and regenerable from the Postgres Wiki; never the
 source of truth. Consumed by humans (e.g. browsed in Obsidian) and by AI agents.
-One Wiki page maps to one concept file in the bundle.
+One Wiki page maps to one concept file in the bundle. Produced by the
+`export_bundle` job (a faithful, no-LLM, deterministic render).
+
+### Generated Output
+A *synthesized presentation artifact* (carousel, PPTX, etc.) produced from wiki
+content via LLM, distinct from a Knowledge Bundle. A Knowledge Bundle faithfully
+renders every wiki page as-is (no LLM, deterministic); a Generated Output
+synthesizes new slide content from retrieved pages (LLM-driven, grounded in the
+wiki via the retrieval pipeline). Both are produced as jobs and downloaded via
+the same artifact endpoint.
+_Avoid_: slide deck, presentation export, output bundle
 
 ### Source
 A raw input document (PDF, article, image, etc.) ingested into the system. Immutable
@@ -105,6 +115,17 @@ at run end. Never a backend, never persisted — distinct from the knowledge gra
 itself, which lives in Postgres.
 _Avoid_: analysis graph, the graph, internal graph
 
+### Graph Canvas
+An *interactive frontend visualization* of the knowledge graph in the
+Interface App — nodes (Entities) and edges (Relations) rendered in a
+force-directed layout, optionally colored/sized by the latest Graph Analysis
+Run's Community and PageRank data. Distinct from the Graph View: the Graph
+Canvas *consumes* graph data the Backend serves; it is not the transient
+in-memory networkx. The Backend serves the data (`GET /api/v1/graph`); the
+Interface App does the layout.
+_Avoid_: canvas (ambiguous — could mean the HTML element), graph view (when
+meaning the app's UI)
+
 ## Roles
 
 ### Backend (rag_wiki)
@@ -114,8 +135,10 @@ API and MCP transport.
 _Avoid_: AI systems, this project, the backend service
 
 ### Interface App
-A separate full-stack application that renders the wiki for end users and owns
-authentication. Calls the Backend's API server-side.
+A **separate project** (different repo, different tech stack — likely
+TypeScript + Vue/React) that renders the wiki for end users and owns
+authentication. Calls the Backend's HTTP API server-side over Tailscale.
+Shares only PostgreSQL with the Backend. No frontend code exists in this repo.
 _Avoid_: dedicated app, dedicated full-stack application, the interfaces
 
 ### Client
@@ -138,6 +161,15 @@ _Avoid_: consumer, integrator
   belongs to at most one **Community** within a run (singletons allowed for
   isolated Entities). The latest completed run is the current view of how the
   graph clustered; older runs are retained for comparison.
+- An **Interface App** renders a **Graph Canvas** from the graph data the
+  **Backend** serves (`/api/v1/graph`) plus the latest **Graph Analysis Run**'s
+  Community/PageRank snapshots for coloring and sizing. The Backend serves data;
+  the App does the layout.
+- An **Interface App** requests **Generated Outputs** from the **Backend** via
+  the `generate_output` job; the Backend grounds the output in the wiki via the
+  retrieval pipeline, synthesizes a slide spec via LLM, and renders to the
+  requested format(s). The app downloads the artifact via the shared job-artifact
+  endpoint.
 
 ## Flagged ambiguities
 
