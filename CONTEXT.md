@@ -12,8 +12,16 @@ entities/relations). All durable knowledge lives here.
 ### Wiki
 A set of **LLM-maintained markdown pages** that present a curated, synthesized view
 *derived from* the Postgres knowledge graph. The wiki is not authoritative — it can
-be regenerated or repaired from the database. It is the human-facing layer (e.g.
-browsed in Obsidian), analogous to a compiled artifact built from source.
+be regenerated or repaired from the database. It lives in Postgres and is the
+source of truth for synthesized knowledge. Its file-based rendering is the
+**Knowledge Bundle**.
+
+### Knowledge Bundle
+The exported, file-based rendering of the **Wiki** as a directory of markdown
+concept files, each with structured front-matter and markdown links to other
+concepts in the bundle. Derived and regenerable from the Postgres Wiki; never the
+source of truth. Consumed by humans (e.g. browsed in Obsidian) and by AI agents.
+One Wiki page maps to one concept file in the bundle.
 
 ### Source
 A raw input document (PDF, article, image, etc.) ingested into the system. Immutable
@@ -58,6 +66,45 @@ A FastMCP wrapper that exposes RagWiki knowledge graph tools (query, retrieve)
 via stdio or Streamable HTTP for MCP hosts (Obsidian, Claude Desktop, VS Code).
 Proxies requests to the backend FastAPI.
 
+### Graph Analysis Run
+A single batch execution of community detection, PageRank, and surprising-connection
+detection over the published knowledge graph. Produces an immutable persisted
+snapshot of Communities, memberships, cohesions, centralities, and Surprising
+Connections for that run. A later run may produce different Communities; old runs
+are retained for diffing.
+_Avoid_: analysis pass, graph rebuild, cluster run
+
+### Community
+A set of Entities grouped together by a Graph Analysis Run because they share many
+Relations among themselves and comparatively fewer with Entities outside the group.
+Specific to one Graph Analysis Run; not persisted across runs as the same Community.
+_Avoid_: cluster, module, theme
+
+### Cohesion
+A 0–1 density score per Community: how internally connected the Community is relative
+to its maximum possible internal Relations. An input to Surprising Connection, not a
+quality judgement about the Community.
+_Avoid_: density, score, quality
+
+### God Node
+An Entity that ranks highest within its run by PageRank over the directed, weighted
+knowledge graph — a "most-referred-to" concept, not necessarily the most semantically
+important one. Recovered from the persisted per-run PageRank scores.
+_Avoid_: hub, central node, important entity
+
+### Surprising Connection
+An inter-Community Relation whose endpoints both carry high PageRank and whose
+Communities both have low Cohesion — flagged as a notable bridge between otherwise
+disconnected areas. Survives a top-K ranking threshold per run.
+_Avoid_: bridge edge, anomaly, weird link
+
+### Graph View
+A transient, in-memory graph constructed from published Entities and Relations for
+the duration of one Graph Analysis Run. Loaded from Postgres at run start, discarded
+at run end. Never a backend, never persisted — distinct from the knowledge graph
+itself, which lives in Postgres.
+_Avoid_: analysis graph, the graph, internal graph
+
 ## Roles
 
 ### Backend (rag_wiki)
@@ -83,3 +130,23 @@ _Avoid_: consumer, integrator
   authentication; it proxies or gates access to the **Backend**.
 - The **Backend** does not authenticate **Clients** in Stage-1; isolation is
   enforced by the network (trusted-clients-only).
+- A **Graph Analysis Run** reads the published knowledge graph into a transient
+  **Graph View**, computes **Communities** with per-community **Cohesion**,
+  **God Nodes** via PageRank, and **Surprising Connections** ranked by an edge
+  bridge score, then persists all four as immutable rows keyed to the run.
+- A **Community** belongs to exactly one **Graph Analysis Run**; an **Entity**
+  belongs to at most one **Community** within a run (singletons allowed for
+  isolated Entities). The latest completed run is the current view of how the
+  graph clustered; older runs are retained for comparison.
+
+## Flagged ambiguities
+
+- "graph" was used to mean both the **knowledge graph** (the persisted
+  `entities`/`relations` in Postgres, the Source of Truth) and a **Graph View**
+  (transient in-memory analysis artifact). Resolved: these are distinct. The
+  knowledge graph is durable storage; a Graph View is recomputed each run.
+- "cluster" was used to mean both the action of running community detection and
+  its result. Resolved: the action is **Cluster** (a step inside a Graph Analysis
+  Run); the result is a **Community**.
+- "hub"/"central node" was used loosely for high-pagerank Entities. Resolved:
+  the canonical term is **God Node**, scoped to a single run's PageRank ranking.

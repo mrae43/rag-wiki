@@ -68,7 +68,10 @@ column. No multimodal embeddings, no separate embedding spaces. (ADR-0003)
 
 **Wiki pages live in Postgres** — `wiki_pages` table is the source of truth.
 File export to `.md` files (for Obsidian) is optional and derived, never
-primary storage. CLI: `rag-wiki export`. (ADR-0006)
+primary storage. CLI: `rag-wiki export`. Export emits the OKF (Open Knowledge
+Format) bundle format — front-matter, flat `entities/`+`sources/` layout,
+inline `[[slug]]`→Markdown link rewrite, `index.md`+`log.md`, manifest-based
+diff. (ADR-0006, ADR-0019)
 
 **No direct LLM API calls outside the provider abstraction** — all LLM calls
 go through the `ChatProvider` and `EmbeddingProvider` protocols (defined in
@@ -107,6 +110,19 @@ only, not defer-all-to-batch. (ADR-0008)
 **Automated ingestion for v1** — ingest commits directly. `entities`,
 `relations`, and `wiki_pages` must include a `status` column defaulting to
 `published` so a future `pending_review` workflow is additive. (ADR-0010)
+
+**Transient Graph View for analysis** — community detection, PageRank, cohesion
+scoring, and surprising-connection detection run as a batch job inside the
+worker. The Graph View is a transient `networkx` graph loaded from Postgres,
+run inside `asyncio.to_thread`, discarded at the end of the run; never a
+backend, never persisted. All outputs (Communities, Cohesion, God Nodes,
+Surprising Connections) live in four append-only `run_id`-keyed snapshot tables
+(`graph_analysis_runs`, `community_summaries`, `community_members`,
+`surprising_connections`). Triggered manually via `rag-wiki analyze-graph` — no
+auto-enqueue after ingest. The existing recursive CTE traversal (`retrieval/`)
+and wiki synthesis (`wiki/`) are untouched; the analysis layer is additive. Read
+endpoints under `rag_wiki/api/routes/analysis.py` expose the persisted snapshots;
+MCP tools are deferred to Phase B. (ADR-0020)
 
 **Planner-driven processing** — a planner module classifies documents (density,
 content type) and queries (intent, complexity) and routes each operation to the
@@ -151,6 +167,8 @@ is additive — no Stage-1 artifact is rewritten. (ADR-0017)
 | 0016 | MCP server         | Python FastMCP wrapper, dual-transport (stdio+Streamable HTTP), HTTP proxy to existing FastAPI                       |
 | 0017 | Deployment         | Stage-1 Compose-on-VM topology, trusted-clients-only, manual-gated CI/CD, Tailscale-internal TLS, stdio-only MCP   |
 | 0018 | CI/Security        | Branch protection, release & security policy for the public portfolio repo (Rulesets, no-bypass, tag releases, Dependabot/CodeQL) |
+| 0019 | Wiki export        | Adopt OKF (Open Knowledge Format) as the `rag-wiki export` format — export-only, Postgres stays SoT; front-matter set, flat directory, inline `[[slug]]` rewrite, manifest-based `log.md`, per-page atomic writes |
+| 0020 | Graph analysis     | Transient networkx Graph View + per-run snapshot tables (`graph_analysis_runs`, `community_summaries`, `community_members`, `surprising_connections`); manual CLI trigger, full re-cluster, coexists with retrieval CTE; FastAPI read endpoints in v1, MCP deferred to Phase B |
 
 ---
 
@@ -183,6 +201,7 @@ rag_wiki/
     exceptions.py        # Planner-specific exceptions
   graph/               # extraction.py, resolution.py, merge.py, schemas.py
   retrieval/           # Hybrid retrieval (seeds.py, traversal.py, context.py, scoring.py, schemas.py, orchestrator.py)
+  analysis/            # Graph analysis (view.py, algorithms.py, runner.py, schemas.py) — transient networkx
   wiki/                # Wiki synthesis (synthesis.py, context.py, slug.py, templates/)
   jobs/                # Job queue (enqueue, claim_next, complete_job, fail_job)
   storage/             # Pluggable storage provider
@@ -197,7 +216,7 @@ rag_wiki/
     errors.py            # MCP error message formatter
   prompts/             # LLM prompt templates
   db/
-    models/              # graph.py, wiki.py, jobs.py, source.py, index.py (Chunk lives here)
+    models/              # graph.py, wiki.py, jobs.py, source.py, index.py (Chunk lives here), analysis.py (run snapshots)
     session.py           # Async session factory
     base.py              # Declarative base, UUIDMixin, TimestampMixin
 tests/
