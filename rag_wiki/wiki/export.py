@@ -671,6 +671,26 @@ async def export_bundle(
 
     Returns:
         The number of pages that were added or modified in this run.
+
+    Crash behavior (v1 best-effort):
+        Page files are written incrementally during the run; the manifest and
+        ``log.md`` are only flushed at the end of a successful run. If the
+        export process crashes or is interrupted after some page writes but
+        before the final flush:
+
+        * Some OKF page files may reflect the new run while others reflect the
+          previous run, producing a partially updated bundle.
+        * The hidden manifest will still describe the previous run, so the
+          next export may re-write pages that were already updated and may not
+          detect orphans that were created by the interruption.
+        * ``log.md`` will not record the partial run; no added/modified/removed
+          entries will be appended for the interrupted export.
+        * Orphan deletion (pages removed from the DB since the last successful
+          export) is deferred until the end of a successful run.
+
+        This is accepted v1 behavior. A future version may introduce an
+        atomic or transactional flush so the bundle, manifest, and log advance
+        together.
     """
     manifest = await _Manifest.load(storage, root_dir)
     slug_map = await build_slug_name_map(db)
