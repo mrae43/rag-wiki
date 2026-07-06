@@ -1,5 +1,7 @@
 .venv/
+.venv-root-trashed/
 __pycache__/
+HANDOFF-*.md
 *.pyc
 .mypy_cache/
 .pytest_cache/
