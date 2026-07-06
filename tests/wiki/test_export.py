@@ -17,13 +17,17 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from rag_wiki.db.models.graph import PublishedStatus
+from rag_wiki.db.models.graph import Entity, PublishedStatus
 from rag_wiki.db.models.wiki import WikiPage
 from rag_wiki.exceptions import StorageError
 from rag_wiki.storage.base import StorageProvider
+from rag_wiki.storage.local import LocalStorageProvider
 from rag_wiki.wiki.export import (
     _build_front_matter,
+    _build_page_info,
     _delete_orphan_pages,
     _first_paragraph_excerpt,
     _hash_content,
@@ -31,7 +35,10 @@ from rag_wiki.wiki.export import (
     _Manifest,
     _page_kind,
     _page_path,
+    _render_dir_index,
     _render_page,
+    _render_root_index,
+    export_bundle,
 )
 
 # ---------------------------------------------------------------------------
@@ -584,3 +591,377 @@ class TestDeleteOrphanPages:
         """An empty set of paths does nothing."""
         await _delete_orphan_pages(set(), mock_storage_provider, tmp_path)
         # Should not raise
+
+
+# ---------------------------------------------------------------------------
+# _build_page_info
+# ---------------------------------------------------------------------------
+
+
+class TestBuildPageInfo:
+    def test_entity_page(
+        self,
+        entity_page: WikiPage,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Entity page info uses entity.description."""
+        info = _build_page_info(entity_page, slug_map)
+        assert info["path"] == "entities/acme-corp-11111111.md"
+        assert info["slug"] == "acme-corp-11111111"
+        assert info["title"] == "Acme Corp"
+        assert info["description"] == "A fictional corporation."
+        assert info["page_kind"] == "entity"
+
+    def test_source_page(
+        self,
+        source_page: WikiPage,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Source page info uses first-paragraph excerpt."""
+        info = _build_page_info(source_page, slug_map)
+        assert info["path"] == "sources/meeting-notes-22222222.md"
+        assert info["page_kind"] == "source_summary"
+        assert info["description"] == "Discussed project roadmap."
+
+    def test_entity_without_description(
+        self,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Entity with no description returns empty-string description."""
+        entity = MagicMock()
+        entity.entity_type = "person"
+        entity.description = None
+        entity.id = uuid.UUID("33333333-3333-3333-3333-333333333333")
+        page = MagicMock(spec=WikiPage)
+        page.entity_id = entity.id
+        page.entity = entity
+        page.slug = "john-33333333"
+        page.title = "John"
+        page.content = "Some content."
+        page.synthesized_from_sources = None
+        info = _build_page_info(page, slug_map)
+        assert info["description"] == ""
+
+
+# ---------------------------------------------------------------------------
+# _render_root_index / _render_dir_index
+# ---------------------------------------------------------------------------
+
+
+class TestRenderIndex:
+    def test_root_index_with_both_kinds(
+        self,
+        entity_page: WikiPage,
+        source_page: WikiPage,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Root index lists both entity and source pages."""
+        text = _render_root_index([entity_page, source_page], slug_map)
+        assert text.startswith("# Wiki Index")
+        assert "## Entities" in text
+        assert "## Source Summaries" in text
+        assert "Acme Corp" in text
+        assert "Meeting Notes" in text
+
+    def test_root_index_empty(
+        self,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Root index with no pages has no section headings."""
+        text = _render_root_index([], slug_map)
+        assert "## Entities" not in text
+        assert "## Source Summaries" not in text
+
+    def test_dir_index_entity(
+        self,
+        entity_page: WikiPage,
+        source_page: WikiPage,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Entity directory index lists only entity pages."""
+        text = _render_dir_index([entity_page, source_page], "entity", slug_map)
+        assert text.startswith("# Entities")
+        assert "Acme Corp" in text
+        assert "Meeting Notes" not in text
+        # Links are relative within directory
+        assert "acme-corp-11111111.md" in text
+        assert "../entities/" not in text
+
+    def test_dir_index_source(
+        self,
+        entity_page: WikiPage,
+        source_page: WikiPage,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Source directory index lists only source-summary pages."""
+        text = _render_dir_index([entity_page, source_page], "source_summary", slug_map)
+        assert text.startswith("# Source Summaries")
+        assert "Meeting Notes" in text
+        assert "Acme Corp" not in text
+
+    def test_dir_index_empty(
+        self,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Empty directory index has heading but no list items."""
+        text = _render_dir_index([], "entity", slug_map)
+        assert text.startswith("# Entities")
+        assert "- " not in text
+
+
+# ---------------------------------------------------------------------------
+# export_bundle integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestExportBundle:
+    """Integration tests for the full export_bundle orchestrator.
+
+    Seeds real Entity and WikiPage rows in the test database and verifies
+    the bundle structure written through a tmp_path-rooted LocalStorageProvider.
+    """
+
+    async def test_full_bundle_creation(
+        self,
+        db: AsyncSession,
+        tmp_path: Path,
+    ) -> None:
+        """First export creates a complete bundle with all expected files."""
+        eid = uuid.UUID("11111111-1111-1111-1111-111111111111")
+        entity = Entity(
+            id=eid,
+            name="Acme Corp",
+            entity_type="organization",
+            description="A fictional corporation.",
+        )
+        db.add(entity)
+        db.add(
+            WikiPage(
+                entity_id=eid,
+                title="Acme Corp",
+                slug="acme-corp-11111111",
+                content=(
+                    "**Acme Corp** is a fictional organization.\n\n"
+                    "See [[other-entity]]."
+                ),
+                status=PublishedStatus.PUBLISHED,
+                synthesized_at=datetime(2026, 6, 15, 12, 0, 0, tzinfo=UTC),
+            )
+        )
+        # Source-summary page
+        db.add(
+            WikiPage(
+                entity_id=None,
+                title="Meeting Notes",
+                slug="meeting-notes-22222222",
+                content="Discussed project roadmap.\n\nKey decisions recorded.",
+                status=PublishedStatus.PUBLISHED,
+                synthesized_at=datetime(2026, 6, 16, 14, 30, 0, tzinfo=UTC),
+                synthesized_from_sources=[
+                    "22222222-2222-2222-2222-222222222222",
+                ],
+            )
+        )
+        await db.flush()
+
+        settings_mock = MagicMock()
+        settings_mock.upload_dir = tmp_path / "uploads"
+        storage = LocalStorageProvider(settings_mock)
+
+        count = await export_bundle(db, storage, tmp_path, "http://localhost:8000")
+
+        assert count == 2
+
+        # Entity page
+        entity_file = tmp_path / "entities" / "acme-corp-11111111.md"
+        assert entity_file.is_file()
+        entity_content = entity_file.read_text()
+        assert entity_content.startswith("---")
+        assert "type: organization" in entity_content
+        assert "[[other-entity]]" not in entity_content
+        assert "[other-entity](../entities/other-entity.md)" in entity_content
+
+        # Source page
+        source_file = tmp_path / "sources" / "meeting-notes-22222222.md"
+        assert source_file.is_file()
+
+        # Root index
+        root_index = tmp_path / "index.md"
+        assert root_index.is_file()
+        root_text = root_index.read_text()
+        assert "## Entities" in root_text
+        assert "## Source Summaries" in root_text
+        assert "Acme Corp" in root_text
+        assert "Meeting Notes" in root_text
+
+        # Entity index
+        entity_index = tmp_path / "entities" / "index.md"
+        assert entity_index.is_file()
+        entity_index_text = entity_index.read_text()
+        assert "Acme Corp" in entity_index_text
+
+        # Source index
+        source_index = tmp_path / "sources" / "index.md"
+        assert source_index.is_file()
+        source_index_text = source_index.read_text()
+        assert "Meeting Notes" in source_index_text
+
+        # Manifest
+        manifest_file = tmp_path / ".rag-wiki-export-manifest.json"
+        assert manifest_file.is_file()
+        manifest_data = json.loads(manifest_file.read_text())
+        assert "entities/acme-corp-11111111.md" in manifest_data
+        assert "sources/meeting-notes-22222222.md" in manifest_data
+        assert len(manifest_data["entities/acme-corp-11111111.md"]) == 64
+
+        # Log
+        log_file = tmp_path / "log.md"
+        assert log_file.is_file()
+        log_text = log_file.read_text()
+        assert "**added**" in log_text
+
+    async def test_rerun_no_changes(
+        self,
+        db: AsyncSession,
+        tmp_path: Path,
+    ) -> None:
+        """Re-exporting with identical data produces no new log entries."""
+        eid = uuid.UUID("11111111-1111-1111-1111-111111111111")
+        entity = Entity(
+            id=eid,
+            name="Acme Corp",
+            entity_type="organization",
+        )
+        db.add(entity)
+        db.add(
+            WikiPage(
+                entity_id=eid,
+                title="Acme Corp",
+                slug="acme-corp-11111111",
+                content="Content.",
+                status=PublishedStatus.PUBLISHED,
+            )
+        )
+        await db.flush()
+
+        settings_mock = MagicMock()
+        settings_mock.upload_dir = tmp_path / "uploads"
+        storage = LocalStorageProvider(settings_mock)
+
+        count1 = await export_bundle(db, storage, tmp_path, "http://localhost:8000")
+        assert count1 == 1
+
+        count2 = await export_bundle(db, storage, tmp_path, "http://localhost:8000")
+        assert count2 == 0
+
+        log_text = (tmp_path / "log.md").read_text()
+        assert log_text.count("**added**") == 1
+
+    async def test_orphan_deletion(
+        self,
+        db: AsyncSession,
+        tmp_path: Path,
+    ) -> None:
+        """Pages removed from the DB are deleted from the bundle on re-export."""
+        eid = uuid.UUID("11111111-1111-1111-1111-111111111111")
+        entity = Entity(
+            id=eid,
+            name="Acme Corp",
+            entity_type="organization",
+        )
+        db.add(entity)
+        db.add(
+            WikiPage(
+                entity_id=eid,
+                title="Acme Corp",
+                slug="acme-corp-11111111",
+                content="Content.",
+                status=PublishedStatus.PUBLISHED,
+            )
+        )
+        await db.flush()
+
+        settings_mock = MagicMock()
+        settings_mock.upload_dir = tmp_path / "uploads"
+        storage = LocalStorageProvider(settings_mock)
+
+        await export_bundle(db, storage, tmp_path, "http://localhost:8000")
+
+        # Delete the page
+        await db.execute(sa.delete(WikiPage))
+        await db.flush()
+
+        await export_bundle(db, storage, tmp_path, "http://localhost:8000")
+
+        entity_file = tmp_path / "entities" / "acme-corp-11111111.md"
+        assert not entity_file.exists()
+
+        log_text = (tmp_path / "log.md").read_text()
+        assert "**removed**" in log_text
+
+    async def test_empty_database(
+        self,
+        db: AsyncSession,
+        tmp_path: Path,
+    ) -> None:
+        """Export with no published pages creates root index but no dir indexes."""
+        settings_mock = MagicMock()
+        settings_mock.upload_dir = tmp_path / "uploads"
+        storage = LocalStorageProvider(settings_mock)
+
+        count = await export_bundle(db, storage, tmp_path, "http://localhost:8000")
+        assert count == 0
+
+        root_index = tmp_path / "index.md"
+        assert root_index.is_file()
+        assert "## Entities" not in root_index.read_text()
+
+        assert not (tmp_path / "entities" / "index.md").exists()
+        assert not (tmp_path / "sources" / "index.md").exists()
+
+    async def test_manifest_persistence(
+        self,
+        db: AsyncSession,
+        tmp_path: Path,
+    ) -> None:
+        """Manifest persists content hashes across export runs."""
+        eid = uuid.UUID("11111111-1111-1111-1111-111111111111")
+        entity = Entity(
+            id=eid,
+            name="Acme Corp",
+            entity_type="organization",
+        )
+        db.add(entity)
+        page = WikiPage(
+            entity_id=eid,
+            title="Acme Corp",
+            slug="acme-corp-11111111",
+            content="Original content.",
+            status=PublishedStatus.PUBLISHED,
+        )
+        db.add(page)
+        await db.flush()
+
+        settings_mock = MagicMock()
+        settings_mock.upload_dir = tmp_path / "uploads"
+        storage = LocalStorageProvider(settings_mock)
+
+        await export_bundle(db, storage, tmp_path, "http://localhost:8000")
+
+        # Read manifest
+        manifest_data = json.loads(
+            (tmp_path / ".rag-wiki-export-manifest.json").read_text()
+        )
+        first_hash = manifest_data["entities/acme-corp-11111111.md"]
+
+        # Update content and re-export
+        page.content = "Updated content."
+        await db.flush()
+
+        await export_bundle(db, storage, tmp_path, "http://localhost:8000")
+
+        manifest_data = json.loads(
+            (tmp_path / ".rag-wiki-export-manifest.json").read_text()
+        )
+        second_hash = manifest_data["entities/acme-corp-11111111.md"]
+        assert second_hash != first_hash

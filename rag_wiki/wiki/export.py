@@ -22,6 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
+from rag_wiki.db.models.graph import PublishedStatus
 from rag_wiki.db.models.source import Source
 from rag_wiki.db.models.wiki import WikiPage
 from rag_wiki.exceptions import StorageError
@@ -443,6 +444,114 @@ async def _delete_orphan_pages(
 
 
 # ---------------------------------------------------------------------------
+# Page info helper for index rendering
+# ---------------------------------------------------------------------------
+
+
+def _build_page_info(
+    page: WikiPage,
+    slug_map: dict[str, str],
+) -> dict[str, str]:
+    """Build a page-info dict for index rendering.
+
+    Args:
+        page: The wiki page.
+        slug_map: Slug-to-display-name map (for label resolution).
+
+    Returns:
+        A dict with keys ``path``, ``slug``, ``title``, ``description``,
+        and ``page_kind``.
+    """
+    kind = _page_kind(page)
+    path = _page_path(page.slug, kind)
+
+    if page.entity_id is not None and page.entity is not None:
+        description = page.entity.description or ""
+    else:
+        description = _first_paragraph_excerpt(page.content)
+
+    return {
+        "path": path,
+        "slug": page.slug,
+        "title": page.title,
+        "description": description,
+        "page_kind": kind,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Index renderers
+# ---------------------------------------------------------------------------
+
+
+def _render_root_index(pages: list[WikiPage], slug_map: dict[str, str]) -> str:
+    """Render the root ``index.md`` listing all concepts grouped by ``page_kind``.
+
+    Args:
+        pages: All published wiki pages.
+        slug_map: Slug-to-display-name map.
+
+    Returns:
+        A markdown string suitable for writing to ``index.md``.
+    """
+    lines = ["# Wiki Index", ""]
+    entity_pages = [p for p in pages if _page_kind(p) == "entity"]
+    source_pages = [p for p in pages if _page_kind(p) == "source_summary"]
+
+    if entity_pages:
+        lines.append("## Entities")
+        lines.append("")
+        for p in entity_pages:
+            info = _build_page_info(p, slug_map)
+            desc = f" — {info['description']}" if info["description"] else ""
+            lines.append(f"- [{info['title']}]({info['path']}){desc}")
+        lines.append("")
+
+    if source_pages:
+        lines.append("## Source Summaries")
+        lines.append("")
+        for p in source_pages:
+            info = _build_page_info(p, slug_map)
+            desc = f" — {info['description']}" if info["description"] else ""
+            lines.append(f"- [{info['title']}]({info['path']}){desc}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _render_dir_index(
+    pages: list[WikiPage],
+    kind: str,
+    slug_map: dict[str, str],
+) -> str:
+    """Render a per-directory ``index.md`` (``entities/`` or ``sources/``).
+
+    Links are relative within the directory (e.g. ``{slug}.md``).
+
+    Args:
+        pages: All published wiki pages (filtered internally by ``kind``).
+        kind: ``"entity"`` or ``"source_summary"``.
+        slug_map: Slug-to-display-name map.
+
+    Returns:
+        A markdown string suitable for writing to ``entities/index.md``
+        or ``sources/index.md``.
+    """
+    heading = "Entities" if kind == "entity" else "Source Summaries"
+    lines = [f"# {heading}", ""]
+
+    for p in pages:
+        if _page_kind(p) != kind:
+            continue
+        info = _build_page_info(p, slug_map)
+        desc = f" — {info['description']}" if info["description"] else ""
+        lines.append(f"- [{info['title']}]({info['slug']}.md){desc}")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Public API — kept from earlier refactoring for backward compatibility.
 # ---------------------------------------------------------------------------
 
@@ -526,3 +635,93 @@ def rewrite_links(content: str, slug_map: dict[str, str]) -> str:
         return f"[{label}](../entities/{slug}.md)"
 
     return _SLUG_LINK_RE.sub(_replace, content)
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator: full bundle export
+# ---------------------------------------------------------------------------
+
+
+async def export_bundle(
+    db: AsyncSession,
+    storage: StorageProvider,
+    root_dir: Path,
+    api_base_url: str,
+) -> int:
+    """Run a full OKF bundle export.
+
+    Reads all published wiki pages from the DB, renders them to OKF markdown,
+    writes files via the storage provider, manages the hidden manifest and
+    ``log.md``, and deletes orphaned page files.
+
+    Args:
+        db: An active async database session.
+        storage: The storage provider to write files through.
+        root_dir: The bundle root directory passed to the storage provider.
+        api_base_url: Base URL for front-matter ``resource`` fields.
+
+    Returns:
+        The number of pages that were added or modified in this run.
+    """
+    manifest = await _Manifest.load(storage, root_dir)
+    slug_map = await build_slug_name_map(db)
+
+    result = await db.execute(
+        select(WikiPage)
+        .options(joinedload(WikiPage.entity))
+        .where(WikiPage.status == PublishedStatus.PUBLISHED)
+    )
+    pages = list(result.unique().scalars().all())
+
+    log_writer = _LogWriter(storage, root_dir)
+    new_state: dict[str, str] = {}
+    changed_count = 0
+
+    for page in pages:
+        path, rendered, content_hash = _render_page(page, slug_map, api_base_url)
+        new_state[path] = content_hash
+
+        old_hash = manifest.get(path)
+        if old_hash == content_hash:
+            continue
+
+        await storage.write_text(path, rendered, root_dir=root_dir)
+
+        if old_hash is None:
+            log_writer.add_entry("added", path, page.title)
+        else:
+            log_writer.add_entry("modified", path, page.title)
+
+        changed_count += 1
+
+    # Detect and delete orphan pages (removed from DB since last export).
+    removed_paths = manifest.removed_vs(new_state)
+    if removed_paths:
+        for rp in sorted(removed_paths):
+            title = Path(rp).stem
+            log_writer.add_entry("removed", rp, title)
+        await _delete_orphan_pages(removed_paths, storage, root_dir)
+
+    # Render and write index pages.
+    root_index = _render_root_index(pages, slug_map)
+    await storage.write_text("index.md", root_index, root_dir=root_dir)
+
+    entity_pages = [p for p in pages if _page_kind(p) == "entity"]
+    source_pages = [p for p in pages if _page_kind(p) == "source_summary"]
+
+    if entity_pages:
+        entity_index = _render_dir_index(entity_pages, "entity", slug_map)
+        await storage.write_text("entities/index.md", entity_index, root_dir=root_dir)
+
+    if source_pages:
+        source_index = _render_dir_index(source_pages, "source_summary", slug_map)
+        await storage.write_text("sources/index.md", source_index, root_dir=root_dir)
+
+    # Persist updated manifest (current pages only, orphans removed).
+    new_manifest = _Manifest()
+    new_manifest._data = dict(new_state)
+    await new_manifest.save(storage, root_dir)
+
+    await log_writer.flush()
+
+    return changed_count
