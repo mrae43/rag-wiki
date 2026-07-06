@@ -204,8 +204,12 @@ class FakeStorageProvider:
             )
         del self._store[key]
 
-    async def exists(self, key: str) -> bool:
-        """Return whether the key exists in the in-memory store."""
+    async def exists(self, key: str, root_dir: Path | None = None) -> bool:
+        """Return whether the key exists in the in-memory store.
+
+        ``root_dir`` is accepted for protocol compatibility but ignored —
+        the fake provider is an in-memory dict keyed by storage key.
+        """
         return key in self._store
 
     async def write_text(

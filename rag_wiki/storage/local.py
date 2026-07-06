@@ -116,9 +116,10 @@ class LocalStorageProvider(StorageProvider):
                 ``settings.upload_dir``.
 
         Raises:
-            StorageError: If the file does not exist or cannot be deleted.
+            StorageError: If the file does not exist, cannot be deleted,
+                or the key escapes the root directory (path traversal).
         """
-        path = self._resolve_root(root_dir) / key
+        path = self._safe_join(root_dir, key)
         if not path.exists():
             raise StorageError(
                 f"LocalStorageProvider.delete failed: key={key!r} "
@@ -137,21 +138,66 @@ class LocalStorageProvider(StorageProvider):
                 f"LocalStorageProvider.delete failed: key={key!r}"
             ) from exc
 
-    async def exists(self, key: str) -> bool:
+    async def exists(self, key: str, root_dir: Path | None = None) -> bool:
         """
         Check whether a file exists for the given storage key.
 
         Args:
-            key: Storage key returned by upload().
+            key: Storage key returned by upload(), or a relative path
+                under the root directory.
+            root_dir: Optional filesystem root override. Defaults to
+                ``settings.upload_dir``.
 
         Returns:
             True if the file exists, False otherwise.
+
+        Raises:
+            StorageError: If the key escapes the root directory
+                (path traversal).
         """
-        return (self._upload_dir / key).exists()
+        return self._safe_join(root_dir, key).exists()
 
     def _resolve_root(self, root_dir: Path | None) -> Path:
         """Return the effective root directory for text/list operations."""
         return root_dir if root_dir is not None else self._upload_dir
+
+    def _safe_join(self, root_dir: Path | None, key: str) -> Path:
+        """Join a key onto root_dir, rejecting paths that escape the root.
+
+        Resolves both the root and the joined path lexically (symlinks are
+        not followed because ``Path.resolve(strict=False)`` normalizes
+        ``..`` and ``.`` components without requiring existence). If the
+        resolved target does not lie under the resolved root, the key is
+        attempting a path traversal and is rejected.
+
+        Args:
+            root_dir: Optional root directory override.
+            key: Relative path under the root (e.g. ``entities/slug.md``).
+
+        Returns:
+            The resolved absolute path, guaranteed to be under the root.
+
+        Raises:
+            StorageError: If the key escapes the root directory. This
+                covers absolute keys (``/etc/passwd``), parent traversal
+                (``../../secret``), and any other key whose resolved path
+                is not a descendant of the resolved root.
+        """
+        root = self._resolve_root(root_dir).resolve()
+        target = (root / key).resolve()
+        try:
+            target.relative_to(root)
+        except ValueError as exc:
+            logger.error(
+                "LocalStorageProvider path traversal blocked",
+                key=key,
+                root=str(root),
+                target=str(target),
+            )
+            raise StorageError(
+                f"LocalStorageProvider: key={key!r} escapes root {str(root)!r}"
+            ) from exc
+        return target
 
     async def write_text(
         self,
@@ -169,9 +215,10 @@ class LocalStorageProvider(StorageProvider):
                 ``settings.upload_dir``.
 
         Raises:
-            StorageError: If the write fails.
+            StorageError: If the write fails or the key escapes the root
+                directory (path traversal).
         """
-        dst = self._resolve_root(root_dir) / key
+        dst = self._safe_join(root_dir, key)
         dst.parent.mkdir(parents=True, exist_ok=True)
         try:
             async with aiofiles.open(dst, "w", encoding="utf-8") as f:
@@ -199,9 +246,10 @@ class LocalStorageProvider(StorageProvider):
             The decoded text content.
 
         Raises:
-            StorageError: If the file does not exist or cannot be read.
+            StorageError: If the file does not exist, cannot be read, or
+                the key escapes the root directory (path traversal).
         """
-        path = self._resolve_root(root_dir) / key
+        path = self._safe_join(root_dir, key)
         if not path.exists():
             raise StorageError(
                 f"LocalStorageProvider.read_text failed: key={key!r} "
@@ -236,15 +284,18 @@ class LocalStorageProvider(StorageProvider):
 
         Returns:
             Sorted list of relative keys.
+
+        Raises:
+            StorageError: If the prefix escapes the root directory
+                (path traversal).
         """
-        base = self._resolve_root(root_dir) / prefix
+        root = self._resolve_root(root_dir).resolve()
+        base = self._safe_join(root_dir, prefix)
         if not base.exists():
             return []
         try:
             paths = [
-                p.relative_to(self._resolve_root(root_dir)).as_posix()
-                for p in base.rglob("*")
-                if p.is_file()
+                p.relative_to(root).as_posix() for p in base.rglob("*") if p.is_file()
             ]
         except OSError as exc:
             logger.error(

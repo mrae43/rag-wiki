@@ -74,12 +74,15 @@ class StorageProvider(Protocol):
         """
         ...
 
-    async def exists(self, key: str) -> bool:
+    async def exists(self, key: str, root_dir: Path | None = None) -> bool:
         """
         Check whether a file exists for the given storage key.
 
         Args:
-            key: Storage key returned by upload().
+            key: Storage key returned by upload(), or a relative path
+                under the root directory.
+            root_dir: Optional filesystem root override. Implementations
+                that do not use a local filesystem may ignore this.
 
         Returns:
             True if the file exists, False otherwise.
