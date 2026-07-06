@@ -60,12 +60,14 @@ class StorageProvider(Protocol):
         """
         ...
 
-    async def delete(self, key: str) -> None:
+    async def delete(self, key: str, root_dir: Path | None = None) -> None:
         """
         Delete the file identified by storage key.
 
         Args:
             key: Storage key returned by upload().
+            root_dir: Optional filesystem root override. Implementations
+                that do not use a local filesystem may ignore this.
 
         Raises:
             StorageError: If the deletion fails.
@@ -81,6 +83,59 @@ class StorageProvider(Protocol):
 
         Returns:
             True if the file exists, False otherwise.
+        """
+        ...
+
+    async def write_text(
+        self,
+        key: str,
+        content: str,
+        root_dir: Path | None = None,
+    ) -> None:
+        """
+        Write UTF-8 text to the given key.
+
+        Args:
+            key: Relative path/key to write (e.g. ``entities/slug.md``).
+            content: Text content to write.
+            root_dir: Optional filesystem root override. Implementations
+                that do not use a local filesystem may ignore this.
+
+        Raises:
+            StorageError: If the write fails.
+        """
+        ...
+
+    async def read_text(self, key: str, root_dir: Path | None = None) -> str:
+        """
+        Read UTF-8 text from the given key.
+
+        Args:
+            key: Relative path/key to read.
+            root_dir: Optional filesystem root override.
+
+        Returns:
+            The decoded text content.
+
+        Raises:
+            StorageError: If the read fails or the key does not exist.
+        """
+        ...
+
+    async def list_keys(
+        self,
+        prefix: str = "",
+        root_dir: Path | None = None,
+    ) -> list[str]:
+        """
+        List keys/paths under the given prefix.
+
+        Args:
+            prefix: Prefix to filter keys by.
+            root_dir: Optional filesystem root override.
+
+        Returns:
+            List of keys matching the prefix, sorted lexicographically.
         """
         ...
 

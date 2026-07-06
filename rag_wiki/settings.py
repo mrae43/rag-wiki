@@ -93,6 +93,10 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = ""
     s3_region: str = "us-east-1"
 
+    # Export output path (local directory or S3 key prefix for OKF bundles).
+    # Defaults to ./exports/; overridden by `rag-wiki export --output PATH`.
+    export_output_path: Path = Path("./exports")
+
     # MCP server
     mcp_transport: Literal["stdio", "http"] = "stdio"
     mcp_api_url: AnyHttpUrl = "http://127.0.0.1:8000"  # type: ignore[assignment]
