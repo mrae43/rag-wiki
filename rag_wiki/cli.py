@@ -92,10 +92,46 @@ def ingest(
 
 
 @app.command()
-def export() -> None:
-    """Export wiki pages to local markdown files."""
-    typer.echo("Export not yet implemented.")
-    raise typer.Exit(1)
+def export(
+    output: Path | None = typer.Option(  # noqa: B008
+        None,
+        "--output",
+        "-o",
+        help="OKF bundle output dir (overrides EXPORT_OUTPUT_PATH)",
+    ),
+) -> None:
+    """Export wiki pages to an OKF markdown bundle.
+
+    Renders all published wiki_pages as an OKF-compliant directory of
+    .md files with YAML front-matter and rewritten [[slug]] markdown
+    links.
+    """
+    asyncio.run(_export_command(output=output))
+
+
+async def _export_command(output: Path | None = None) -> None:
+    """Async helper for the export CLI command.
+
+    Args:
+        output: Override output path. Falls back to
+            ``settings.export_output_path``.
+    """
+    settings = get_settings()
+    root_dir = output or settings.export_output_path
+    storage = get_storage_provider(settings)
+
+    from rag_wiki.wiki.export import export_bundle
+
+    async with AsyncSessionFactory() as db:
+        count = await export_bundle(
+            db=db,
+            storage=storage,
+            root_dir=root_dir,
+            api_base_url=str(settings.mcp_api_url),
+        )
+
+    typer.echo(f"Export complete: {count} page(s) written or updated.")
+    logger.info("export finished", root_dir=str(root_dir), changed_count=count)
 
 
 mcp_app = typer.Typer(help="MCP server commands")
