@@ -9,6 +9,7 @@ Does NOT handle local filesystem storage — use LocalStorageProvider for that.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import BinaryIO
 
 import aioboto3
@@ -115,3 +116,86 @@ class S3StorageProvider(StorageProvider):
                 error=str(exc),
             )
             raise StorageError(f"S3StorageProvider.exists failed: key={key!r}") from exc
+
+    async def write_text(
+        self,
+        key: str,
+        content: str,
+        root_dir: Path | None = None,
+    ) -> None:
+        """Write UTF-8 text to S3 as a single object."""
+        try:
+            async with self._session.client(
+                "s3", endpoint_url=self._endpoint_url
+            ) as s3:
+                await s3.put_object(
+                    Bucket=self._bucket,
+                    Key=key,
+                    Body=content.encode("utf-8"),
+                    ContentType="text/markdown; charset=utf-8",
+                )
+        except ClientError as exc:
+            logger.error(
+                "S3StorageProvider.write_text failed",
+                key=key,
+                bucket=self._bucket,
+                error=str(exc),
+            )
+            raise StorageError(
+                f"S3StorageProvider.write_text failed: key={key!r}"
+            ) from exc
+
+    async def read_text(self, key: str, root_dir: Path | None = None) -> str:
+        """Read and decode UTF-8 text from S3."""
+        try:
+            async with self._session.client(
+                "s3", endpoint_url=self._endpoint_url
+            ) as s3:
+                response = await s3.get_object(Bucket=self._bucket, Key=key)
+                body: bytes = await response["Body"].read()
+                return body.decode("utf-8")
+        except ClientError as exc:
+            error = exc.response.get("Error", {})
+            code = error.get("Code", "")
+            if code in ("404", "NoSuchKey"):
+                raise StorageError(
+                    f"S3StorageProvider.read_text failed: key={key!r} not found"
+                ) from exc
+            logger.error(
+                "S3StorageProvider.read_text failed",
+                key=key,
+                bucket=self._bucket,
+                error=str(exc),
+            )
+            raise StorageError(
+                f"S3StorageProvider.read_text failed: key={key!r}"
+            ) from exc
+
+    async def list_keys(
+        self,
+        prefix: str = "",
+        root_dir: Path | None = None,
+    ) -> list[str]:
+        """List object keys under the given prefix."""
+        keys: list[str] = []
+        try:
+            async with self._session.client(
+                "s3", endpoint_url=self._endpoint_url
+            ) as s3:
+                paginator = s3.get_paginator("list_objects_v2")
+                async for page in paginator.paginate(
+                    Bucket=self._bucket, Prefix=prefix
+                ):
+                    for obj in page.get("Contents", []):
+                        keys.append(obj["Key"])
+        except ClientError as exc:
+            logger.error(
+                "S3StorageProvider.list_keys failed",
+                prefix=prefix,
+                bucket=self._bucket,
+                error=str(exc),
+            )
+            raise StorageError(
+                f"S3StorageProvider.list_keys failed: prefix={prefix!r}"
+            ) from exc
+        return sorted(keys)

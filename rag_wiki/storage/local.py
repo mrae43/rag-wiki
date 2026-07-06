@@ -11,6 +11,7 @@ development and single-instance deployments.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import BinaryIO
 
 import aiofiles
@@ -145,3 +146,112 @@ class LocalStorageProvider(StorageProvider):
             True if the file exists, False otherwise.
         """
         return (self._upload_dir / key).exists()
+
+    def _resolve_root(self, root_dir: Path | None) -> Path:
+        """Return the effective root directory for text/list operations."""
+        return root_dir if root_dir is not None else self._upload_dir
+
+    async def write_text(
+        self,
+        key: str,
+        content: str,
+        root_dir: Path | None = None,
+    ) -> None:
+        """
+        Write UTF-8 text to ``{root_dir}/{key}``.
+
+        Args:
+            key: Relative path under the root directory.
+            content: Text content to write.
+            root_dir: Optional root directory override. Defaults to
+                ``settings.upload_dir``.
+
+        Raises:
+            StorageError: If the write fails.
+        """
+        dst = self._resolve_root(root_dir) / key
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            async with aiofiles.open(dst, "w", encoding="utf-8") as f:
+                await f.write(content)
+        except OSError as exc:
+            logger.error(
+                "LocalStorageProvider.write_text failed",
+                key=key,
+                path=str(dst),
+                error=str(exc),
+            )
+            raise StorageError(
+                f"LocalStorageProvider.write_text failed: key={key!r}"
+            ) from exc
+
+    async def read_text(self, key: str, root_dir: Path | None = None) -> str:
+        """
+        Read UTF-8 text from ``{root_dir}/{key}``.
+
+        Args:
+            key: Relative path under the root directory.
+            root_dir: Optional root directory override.
+
+        Returns:
+            The decoded text content.
+
+        Raises:
+            StorageError: If the file does not exist or cannot be read.
+        """
+        path = self._resolve_root(root_dir) / key
+        if not path.exists():
+            raise StorageError(
+                f"LocalStorageProvider.read_text failed: key={key!r} "
+                f"path={str(path)!r} not found"
+            )
+        try:
+            async with aiofiles.open(path, encoding="utf-8") as f:
+                content: str = await f.read()
+                return content
+        except OSError as exc:
+            logger.error(
+                "LocalStorageProvider.read_text failed",
+                key=key,
+                path=str(path),
+                error=str(exc),
+            )
+            raise StorageError(
+                f"LocalStorageProvider.read_text failed: key={key!r}"
+            ) from exc
+
+    async def list_keys(
+        self,
+        prefix: str = "",
+        root_dir: Path | None = None,
+    ) -> list[str]:
+        """
+        List relative paths under ``{root_dir}/{prefix}``.
+
+        Args:
+            prefix: Directory prefix to filter by.
+            root_dir: Optional root directory override.
+
+        Returns:
+            Sorted list of relative keys.
+        """
+        base = self._resolve_root(root_dir) / prefix
+        if not base.exists():
+            return []
+        try:
+            paths = [
+                p.relative_to(self._resolve_root(root_dir)).as_posix()
+                for p in base.rglob("*")
+                if p.is_file()
+            ]
+        except OSError as exc:
+            logger.error(
+                "LocalStorageProvider.list_keys failed",
+                prefix=prefix,
+                path=str(base),
+                error=str(exc),
+            )
+            raise StorageError(
+                f"LocalStorageProvider.list_keys failed: prefix={prefix!r}"
+            ) from exc
+        return sorted(paths)

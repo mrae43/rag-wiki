@@ -208,6 +208,32 @@ class FakeStorageProvider:
         """Return whether the key exists in the in-memory store."""
         return key in self._store
 
+    async def write_text(
+        self,
+        key: str,
+        content: str,
+        root_dir: Path | None = None,
+    ) -> None:
+        """Store UTF-8 text in memory keyed by ``key``."""
+        self._store[key] = content.encode("utf-8")
+
+    async def read_text(self, key: str, root_dir: Path | None = None) -> str:
+        """Read and decode UTF-8 text from the in-memory store."""
+        data = self._store.get(key)
+        if data is None:
+            raise StorageError(
+                f"FakeStorageProvider.read_text failed: key={key!r} not found"
+            )
+        return data.decode("utf-8")
+
+    async def list_keys(
+        self,
+        prefix: str = "",
+        root_dir: Path | None = None,
+    ) -> list[str]:
+        """Return sorted keys matching the given prefix."""
+        return sorted(k for k in self._store if k.startswith(prefix))
+
     @asynccontextmanager
     async def with_temp_file(self, key: str) -> AsyncIterator[Path]:
         """Write in-memory content to a temp file, yield it, clean up."""
