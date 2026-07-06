@@ -106,17 +106,19 @@ class LocalStorageProvider(StorageProvider):
                 f"LocalStorageProvider.download failed: key={key!r}"
             ) from exc
 
-    async def delete(self, key: str) -> None:
+    async def delete(self, key: str, root_dir: Path | None = None) -> None:
         """
         Delete the file identified by storage key.
 
         Args:
             key: Storage key returned by upload().
+            root_dir: Optional filesystem root override. Defaults to
+                ``settings.upload_dir``.
 
         Raises:
             StorageError: If the file does not exist or cannot be deleted.
         """
-        path = self._upload_dir / key
+        path = self._resolve_root(root_dir) / key
         if not path.exists():
             raise StorageError(
                 f"LocalStorageProvider.delete failed: key={key!r} "

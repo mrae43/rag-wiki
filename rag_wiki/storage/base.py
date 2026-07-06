@@ -60,12 +60,14 @@ class StorageProvider(Protocol):
         """
         ...
 
-    async def delete(self, key: str) -> None:
+    async def delete(self, key: str, root_dir: Path | None = None) -> None:
         """
         Delete the file identified by storage key.
 
         Args:
             key: Storage key returned by upload().
+            root_dir: Optional filesystem root override. Implementations
+                that do not use a local filesystem may ignore this.
 
         Raises:
             StorageError: If the deletion fails.

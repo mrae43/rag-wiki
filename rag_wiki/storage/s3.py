@@ -82,7 +82,7 @@ class S3StorageProvider(StorageProvider):
                 f"S3StorageProvider.download failed: key={key!r}"
             ) from exc
 
-    async def delete(self, key: str) -> None:
+    async def delete(self, key: str, root_dir: Path | None = None) -> None:
         try:
             async with self._session.client(
                 "s3", endpoint_url=self._endpoint_url

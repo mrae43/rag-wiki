@@ -196,7 +196,7 @@ class FakeStorageProvider:
             )
         yield data
 
-    async def delete(self, key: str) -> None:
+    async def delete(self, key: str, root_dir: Path | None = None) -> None:
         """Remove the stored entry for the given key."""
         if key not in self._store:
             raise StorageError(
