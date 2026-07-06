@@ -160,11 +160,20 @@ def _build_front_matter(
 def _append_yaml_field(lines: list[str], key: str, value: str) -> None:
     """Append a YAML key-value pair to the field list, quoting if necessary.
 
+    Multiline values are emitted as a literal block scalar (``|``) so that
+    newlines are preserved and valid YAML is produced.
+
     Args:
         lines: List of YAML lines being built.
         key: The field name.
         value: The field value.
     """
+    if "\n" in value:
+        lines.append(f"{key}: |")
+        for line in value.splitlines():
+            lines.append(f"  {line}")
+        return
+
     needs_quoting = any(
         c in value
         for c in (":", "#", "{", "}", "[", "]", ",", ">", "|", '"', "'", "%", "@", "`")
@@ -579,7 +588,7 @@ async def build_slug_name_map(db: AsyncSession) -> dict[str, str]:
     result = await db.execute(
         select(WikiPage)
         .options(joinedload(WikiPage.entity))
-        .where(WikiPage.status == "published")
+        .where(WikiPage.status == PublishedStatus.PUBLISHED)
     )
     pages = result.unique().scalars().all()
 
@@ -709,13 +718,11 @@ async def export_bundle(
     entity_pages = [p for p in pages if _page_kind(p) == "entity"]
     source_pages = [p for p in pages if _page_kind(p) == "source_summary"]
 
-    if entity_pages:
-        entity_index = _render_dir_index(entity_pages, "entity", slug_map)
-        await storage.write_text("entities/index.md", entity_index, root_dir=root_dir)
+    entity_index = _render_dir_index(entity_pages, "entity", slug_map)
+    await storage.write_text("entities/index.md", entity_index, root_dir=root_dir)
 
-    if source_pages:
-        source_index = _render_dir_index(source_pages, "source_summary", slug_map)
-        await storage.write_text("sources/index.md", source_index, root_dir=root_dir)
+    source_index = _render_dir_index(source_pages, "source_summary", slug_map)
+    await storage.write_text("sources/index.md", source_index, root_dir=root_dir)
 
     # Persist updated manifest (current pages only, orphans removed).
     new_manifest = _Manifest()

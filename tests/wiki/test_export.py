@@ -276,6 +276,33 @@ class TestBuildFrontMatter:
         assert 'title: "Title: Special \\"chars\\""' in fm
         assert 'description: "Value with \\"quotes\\" and colon: here"' in fm
 
+    def test_multiline_description_uses_block_scalar(
+        self,
+        slug_map: dict[str, str],
+    ) -> None:
+        """Multiline values are emitted as a literal block scalar."""
+        entity = MagicMock()
+        entity.entity_type = "organization"
+        entity.description = "First line.\nSecond line.\nThird line."
+        entity.id = uuid.UUID("55555555-5555-5555-5555-555555555555")
+        page = MagicMock(spec=WikiPage)
+        page.entity_id = entity.id
+        page.entity = entity
+        page.slug = "multi-55555555"
+        page.title = "Multi"
+        page.content = "Content."
+        page.synthesized_at = None
+        page.synthesized_from_sources = None
+
+        fm = _build_front_matter(page, slug_map, "http://localhost:8000")
+
+        assert "description: |" in fm
+        assert "  First line." in fm
+        assert "  Second line." in fm
+        assert "  Third line." in fm
+        # The inline key-value form must not appear.
+        assert "description: First line." not in fm
+
 
 # ---------------------------------------------------------------------------
 # _render_page
@@ -904,7 +931,7 @@ class TestExportBundle:
         db: AsyncSession,
         tmp_path: Path,
     ) -> None:
-        """Export with no published pages creates root index but no dir indexes."""
+        """Export with no published pages still writes all index files."""
         settings_mock = MagicMock()
         settings_mock.upload_dir = tmp_path / "uploads"
         storage = LocalStorageProvider(settings_mock)
@@ -916,8 +943,13 @@ class TestExportBundle:
         assert root_index.is_file()
         assert "## Entities" not in root_index.read_text()
 
-        assert not (tmp_path / "entities" / "index.md").exists()
-        assert not (tmp_path / "sources" / "index.md").exists()
+        entity_index = tmp_path / "entities" / "index.md"
+        assert entity_index.is_file()
+        assert entity_index.read_text().startswith("# Entities")
+
+        source_index = tmp_path / "sources" / "index.md"
+        assert source_index.is_file()
+        assert source_index.read_text().startswith("# Source Summaries")
 
     async def test_manifest_persistence(
         self,
