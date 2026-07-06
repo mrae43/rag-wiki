@@ -137,3 +137,121 @@ async def test_upload_large_file(
     )
     chunks = [chunk async for chunk in provider.download("sources/large")]
     assert b"".join(chunks) == data
+
+
+# --- exists with root_dir override -----------------------------------------
+
+
+async def test_exists_uses_root_dir_override(
+    provider: LocalStorageProvider,
+    tmp_path: Path,
+) -> None:
+    """exists resolves keys relative to root_dir when provided."""
+    export_root = tmp_path / "exports"
+    await provider.write_text("index.md", "hello", root_dir=export_root)
+    assert await provider.exists("index.md", root_dir=export_root) is True
+    assert await provider.exists("missing.md", root_dir=export_root) is False
+
+
+async def test_exists_without_root_dir_uses_upload_dir(
+    provider: LocalStorageProvider,
+) -> None:
+    """exists without root_dir checks the default upload_dir."""
+    await provider.upload(
+        source_id="abc-123",
+        file=io.BytesIO(b"data"),
+        filename="test.txt",
+    )
+    assert await provider.exists("sources/abc-123") is True
+    assert await provider.exists("sources/nope") is False
+
+
+# --- Path traversal guard --------------------------------------------------
+
+
+async def test_write_text_rejects_absolute_key(
+    provider: LocalStorageProvider,
+) -> None:
+    """write_text rejects absolute keys that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.write_text("/etc/passwd", "malicious")
+
+
+async def test_write_text_rejects_parent_traversal(
+    provider: LocalStorageProvider,
+    tmp_path: Path,
+) -> None:
+    """write_text rejects ``..`` sequences that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.write_text("../../etc/passwd", "malicious")
+
+
+async def test_read_text_rejects_absolute_key(
+    provider: LocalStorageProvider,
+) -> None:
+    """read_text rejects absolute keys that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.read_text("/etc/passwd")
+
+
+async def test_read_text_rejects_parent_traversal(
+    provider: LocalStorageProvider,
+) -> None:
+    """read_text rejects ``..`` sequences that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.read_text("../../etc/passwd")
+
+
+async def test_delete_rejects_absolute_key(
+    provider: LocalStorageProvider,
+) -> None:
+    """delete rejects absolute keys that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.delete("/etc/passwd")
+
+
+async def test_delete_rejects_parent_traversal(
+    provider: LocalStorageProvider,
+) -> None:
+    """delete rejects ``..`` sequences that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.delete("../../etc/passwd")
+
+
+async def test_exists_rejects_absolute_key(
+    provider: LocalStorageProvider,
+) -> None:
+    """exists rejects absolute keys that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.exists("/etc/passwd")
+
+
+async def test_exists_rejects_parent_traversal(
+    provider: LocalStorageProvider,
+) -> None:
+    """exists rejects ``..`` sequences that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.exists("../../etc/passwd")
+
+
+async def test_list_keys_rejects_parent_traversal(
+    provider: LocalStorageProvider,
+) -> None:
+    """list_keys rejects prefixes that escape the root."""
+    with pytest.raises(StorageError, match="escapes root"):
+        await provider.list_keys(prefix="../../etc/")
+
+
+async def test_safe_key_within_nested_dir_is_allowed(
+    provider: LocalStorageProvider,
+    tmp_path: Path,
+) -> None:
+    """A key with ``..`` that stays within the root is allowed."""
+    export_root = tmp_path / "exports"
+    await provider.write_text("entities/a.md", "a", root_dir=export_root)
+    # ``entities/../entities/a.md`` resolves within root — should succeed.
+    content = await provider.read_text(
+        "entities/../entities/a.md",
+        root_dir=export_root,
+    )
+    assert content == "a"
