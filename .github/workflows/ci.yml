@@ -17,6 +17,8 @@ permissions: {}
       - "tests/**"
       - "rag_wiki/**"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/codeql.yml"
+      - ".github/workflows/_build-scan-push.yml"
       - "docs/ci-context.md"
       # Infra / config / docs that otherwise leave PRs blocked under ruleset
       # required_status_checks (ADR-0018 §#3). Keep narrow; widen deliberately.
@@ -36,6 +38,8 @@ permissions: {}
       - "tests/**"
       - "rag_wiki/**"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/codeql.yml"
+      - ".github/workflows/_build-scan-push.yml"
       - "docs/ci-context.md"
       # Mirror pull_request set — direct pushes to main are blocked by the
       # ruleset's `pull_request` rule anyway; kept for symmetry / future
