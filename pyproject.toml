@@ -34,7 +34,7 @@ dependencies = [
 mineru = ["magic-pdf>=0.6"]
 s3 = ["aioboto3>=13.0"]
 dev = [
-    "pytest>=8.2",
+    "pytest>=9.1.1",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
     "pytest-env>=1.0",
