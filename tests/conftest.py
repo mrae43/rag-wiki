@@ -246,8 +246,9 @@ class FakeStorageProvider:
             raise StorageError(
                 f"FakeStorageProvider.with_temp_file: key={key!r} not found"
             )
-        tmp = Path(tempfile.mktemp(suffix=".bin"))
-        tmp.write_bytes(data)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".bin") as f:
+            f.write(data)
+            tmp = Path(f.name)
         try:
             yield tmp
         finally:
