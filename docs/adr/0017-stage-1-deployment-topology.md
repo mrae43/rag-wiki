@@ -7,174 +7,179 @@ Accepted
 ## Context
 
 The system has been developed for months as a headless AI backend (FastAPI +
-worker + MCP + Postgres). The author now wants to:
-
-1. Deploy it as a standalone system as soon as possible, following best
-   practices.
-2. Move authentication into a future dedicated full-stack **Interface App**,
-   keeping the Backend headless and auth-free.
-3. Learn continuous delivery (CI/CD) by shipping a real deploy pipeline.
-4. Position rag_wiki as a system that is "easy to connect within any existing
-   systems" — starting with the author as the first user, with an SME
-   monetization path later.
+worker + MCP + Postgres), operated so far only via CLI and MCP by a single
+trusted operator. The author wants to deploy it as a standalone system, following
+best practices, and to use the process to learn a real CI/CD pipeline.
 
 ADRs 0004 (single-tenant), 0013 (no auth in v1), and 0016 (dual-transport MCP)
 already establish the *abstract* posture: trusted-network-only, no inbound auth,
-MCP over stdio by default. But none records the *concrete* deployment contract
-— which topology, which CI shape, which secrets posture, which ops floor, which
-MCP transport ships in production. This ADR closes that gap.
+MCP over stdio by default. None of them records the *concrete* deployment
+contract — which topology, which CI shape, which secrets posture, which ops
+floor, which MCP transport ships in production. This ADR closes that gap.
 
-The key constraint is that every Stage-1 decision must be **additive-safe**:
-Stage-2 enhancements (Helm chart, shared API key, auto-deploy, SeaweedFS, MCP
-HTTP service, managed Postgres, observability stack) must land alongside the
-Stage-1 artifacts without requiring a rewrite.
+The trust model below is a standing decision, not a placeholder waiting on a
+future consumer. Whatever eventually calls this backend — CLI, MCP, a future
+UI, an automation script — it does so as a trusted client on the operator's
+own network. The auth posture does not change based on what shape that client
+takes; it changes only if a client outside the operator's trust boundary needs
+access, which is explicitly out of scope for Stage-1.
+
+Every Stage-1 decision must be **additive-safe**: Stage-2 enhancements (Helm
+chart, edge-level API key, auto-deploy, SeaweedFS, MCP HTTP service, managed
+Postgres, observability stack) must land alongside the Stage-1 artifacts
+without requiring a rewrite.
 
 ## Decision
 
 Adopt a **Compose-on-VM deployment** with network-isolation-only auth, a
-manual-gated CI/CD pipeline, and a minimal ops floor. The Backend ships as a
-container image in GHCR; a single VM runs the full stack behind Caddy with
-Tailscale-internal TLS.
+manual-gated CI/CD pipeline with forward-only migrations, and a minimal but
+non-trivial ops floor. The Backend ships as a container image in GHCR; a
+single VM runs the full stack behind Caddy with Tailscale-internal TLS.
 
 ### 1. Trust model: trusted clients only
 
 The Backend runs unauthenticated. The only things that connect to it are
-systems the operator controls: the future Interface App, MCP hosts on the
-operator's machine, automation scripts. Protection = network isolation (private
-VPC or Tailscale), not an application-layer token.
-
-This formalizes ADR-0013 §3 ("No authentication in v1... intended to run inside
-a trusted network or behind an existing gateway") and ADR-0004 (single-tenant,
-per-customer).
+systems the operator controls. Protection = network isolation (Tailscale
+tailnet), not an application-layer token. This formalizes ADR-0013 §3 and
+ADR-0004 (single-tenant). It holds regardless of how many or which clients
+exist, now or later.
 
 ### 2. Topology: Compose-on-VM
 
-A single VM runs `docker compose up` with: `db` (pgvector/pgvector:pg16), `api`
-(uvicorn), `worker` (`python -m rag_wiki.worker`), and `caddy` (reverse proxy
-with auto-HTTPS). Local filesystem storage (`STORAGE_PROVIDER=local`); SeaweedFS
-deferred to Stage-2. The image is pulled from GHCR
-(`ghcr.io/<owner>/rag-wiki:<tag>`), not built on the VM.
+A single VM runs `docker compose up` with four services: `db`
+(pgvector/pgvector:pg16), `api` (uvicorn), `worker`
+(`python -m rag_wiki.worker`), and `caddy` (reverse proxy, auto-HTTPS). Local
+filesystem storage (`STORAGE_PROVIDER=local`); SeaweedFS deferred to Stage-2.
+The image is pulled from GHCR (`ghcr.io/<owner>/rag-wiki:<tag>`), never built
+on the VM.
+
+All four services set `restart: unless-stopped`. Each sets an explicit
+`mem_limit`/`cpus` bound, sized so a runaway ingestion job in `worker` cannot
+starve `api` or `db` on the same VM. Docker's `json-file` log driver is capped
+per-service (`max-size: "10m", max-file: "3"`) to prevent unbounded log growth
+on a host with no log shipping.
 
 ### 3. TLS: Tailscale-internal CA
 
 Caddy terminates TLS using an internal CA (Tailscale's built-in HTTPS or
 Caddy's internal CA). No public DNS domain, no open ports. The VM has zero
-public-facing ports; all access is over the Tailscale tailnet. This is the
-cleanest realization of "if you can reach the port, you're trusted."
+public-facing ports; all access is over the tailnet.
 
-### 4. CI/CD: manual-gated
+### 4. CI/CD: manual-gated, pinned, forward-only
 
 The existing GitHub Actions pipeline (lint → typecheck → test → migrations →
-build → scan) is extended with two jobs:
+build → scan) gains two jobs:
 
 - **push-images**: on `main` push (after scan passes) or `workflow_dispatch`,
-  pushes the image to GHCR with `:latest` + `:sha-<short>` tags.
-- **deploy**: `workflow_dispatch` only (manual-gate), SSHes to the VM, runs
+  pushes the image to GHCR tagged `:latest` and `:sha-<short>`. `:latest` is a
+  convenience tag for local/dev pulls only and is never referenced by the
+  deployed VM.
+- **deploy**: `workflow_dispatch` only, SSHes to the VM, sets `IMAGE_TAG` in
+  `.env` to the specific `sha-<short>` being deployed, and runs
   `docker compose pull && docker compose up -d --remove-orphans`. The
-  entrypoint runs `alembic upgrade head` as today.
+  entrypoint runs `alembic upgrade head`.
 
-Rollback = edit `IMAGE_TAG` in `.env` on the VM + `docker compose up -d`. No
-blue-green, no staging env in Stage-1.
+**Migrations are forward-only in Stage-1.** Rollback is not "revert the image
+and hope the schema still matches" — a bad migration is fixed by shipping a
+new forward migration that corrects or reverts the change, then redeploying.
+Reverting `IMAGE_TAG` without a matching down-migration is explicitly
+unsupported and must not be used as a recovery path, since older code is not
+guaranteed to run against a newer schema.
 
-### 5. Secrets: flat `.env` on the VM
+### 5. Secrets: flat `.env` on the VM, scoped deploy access
 
-A single `.env` file on the VM (gitignored, manually maintained) holds all
-secrets: `POSTGRES_PASSWORD`, `LLM_API_KEY`, `GEMINI_API_KEY`,
+A single `.env` file on the VM (gitignored, manually maintained) holds
+`POSTGRES_PASSWORD`, `LLM_API_KEY`, `GEMINI_API_KEY`,
 `S3_SECRET_ACCESS_KEY` (Stage-2). `DATABASE_URL` is assembled by compose from
-`POSTGRES_PASSWORD` + the known `db` service host, so the operator sets one DB
-secret, not a connection string. `CORS_ORIGINS=""` (locked down; the Interface
-App will call server-side, so CORS is irrelevant). CI secrets hold only what CI
-needs: `GHCR_TOKEN` (the auto-provisioned `GITHUB_TOKEN`),
-`DEPLOY_SSH_KEY`, `DEPLOY_HOST`.
+`POSTGRES_PASSWORD` and the known `db` service host. `CORS_ORIGINS=""`.
+
+CI secrets hold only `GHCR_TOKEN` (auto-provisioned `GITHUB_TOKEN`),
+`DEPLOY_SSH_KEY`, `DEPLOY_HOST`. `DEPLOY_SSH_KEY` authenticates to a
+dedicated, non-root `deploy` user on the VM whose `authorized_keys` entry is
+command-restricted (`command="docker compose ..."`) rather than granting a
+general shell — a compromised CI secret should not yield unrestricted VM
+access.
 
 ### 6. MCP: stdio-only, no service in prod compose
 
 The prod compose runs `db`, `api`, `worker`, `caddy` — no MCP service. The
-operator runs `rag-wiki mcp serve` locally on their own machine with
+operator runs `rag-wiki mcp serve` locally with
 `RAG_WIKI_MCP_API_URL=https://rag-wiki.<tailnet>` pointing at the deployed API
-over Tailscale. Obsidian/Claude Desktop/Copilot Chat spawn it via stdio. The
-MCP HTTP transport is hardened to loopback-only via a settings validator (a
-`model_validator` raises if `mcp_transport == "http"` and `mcp_host` is not a
-loopback address), matching Q2's network-isolation constraint.
+over Tailscale. MCP HTTP transport is hardened to loopback-only via a
+`model_validator` that raises if `mcp_transport == "http"` and `mcp_host` is
+not a loopback address.
 
-### 7. Ops floor: structlog → stdout + `/health` + `pg_dump` cron
+### 7. Ops floor: structured logs, health check, verified backups
 
-- **Logging**: structlog to stdout (already the codebase convention), captured
-  per-container by Docker. `docker compose logs -f` is the only observability
-  surface. No metrics, no dashboard, no Loki/Grafana in Stage-1.
-- **Health**: the existing `GET /health` (lightweight DB query) is the only
-  probe. Compose `healthcheck` uses it; Caddy can use it for upstream gating.
-  No liveness/readiness split (a K8s-era distinction Compose doesn't need).
-- **Backups**: a daily `pg_dump` cron job on the VM
-  (`scripts/backup.sh`), 7-day retention. Postgres is the source of truth
-  (CONTEXT.md, ADR-0001); a daily logical backup covers "VM died" without
-  standing up WAL archiving infra.
+- **Logging**: structlog to stdout, captured per-container by Docker
+  (log-rotated per §2). `docker compose logs -f` is the only observability
+  surface. No metrics, no dashboard, no Loki/Grafana in Stage-1 — this is
+  deliberately deferred, not overlooked, and is the first Stage-1.5 addition
+  once the system carries real traffic.
+- **Health**: `GET /health` (lightweight DB query) backs the Compose
+  `healthcheck` and Caddy's upstream gating. No liveness/readiness split — a
+  K8s-era distinction Compose doesn't need.
+- **Backups**: a daily `pg_dump` cron (`scripts/backup.sh`), 7-day retention.
+  Each run validates its own output (`pg_restore --list` against the dump,
+  non-zero size check) and fails loudly (non-zero exit, logged) if the dump
+  is unusable. A monthly manual restore-to-scratch-DB drill confirms the
+  backup chain actually works end to end, not just that a file gets written.
 
 ## Rationale
 
-- **"Deploy ASAP" + "best practices"**: Compose-on-VM with Caddy auto-HTTPS,
-  GHCR image pull, and a Trivy-scanned manual-gated pipeline is the smallest
-  honest "best-practice" deployment for a headless backend. It teaches the full
-  CD cycle (build → scan → push → deploy → migrate) without the overhead of
-  authoring a Helm chart correctly — which is genuinely hard and would blow the
-  "ASAP" budget.
-- **"Auth moves out"**: network isolation is the only option with *zero* auth
-  code in rag_wiki, which is exactly what the author wants. The "best practice"
-  here is network isolation + TLS termination at the reverse proxy, not an
-  app-layer token. This is a legitimate, documented pattern for headless
-  backends behind a gateway (ADR-0013 §3).
-- **YAGNI + additive-safe**: every Stage-2 enhancement lands alongside the
-  Stage-1 artifacts without a rewrite. The Helm chart translates
-  `docker-compose.prod.yml` → `values.yaml` line-by-line. A shared API key
-  bolts onto the `api` service as an env var. A staging env is a second compose
-  overlay on the same base. SeaweedFS is an additional service block. MCP HTTP
-  is an additional compose service. Auto-deploy is a trigger change on the
-  `deploy` job. Managed Postgres is a `db` service swap. An observability stack
-  is a `logging` service block. No Stage-2 move requires touching Stage-1 code.
-- **SME graduation is not blocked**: an SME running their own single-tenant
-  instance per ADR-0004 is also on a private network / behind their own gateway.
-  The Stage-1 artifacts (`docker-compose.prod.yml` + `Caddyfile` +
-  `.env.example`) are exactly what an SME would lift verbatim. When an SME wants
-  a public endpoint, that's when a real auth ADR lands — additive, not a
-  rewrite. The Helm chart (Stage-2) is a polish of the *same* topology, not a
-  different system.
-- **MCP stdio-only**: the only MCP client today is the operator's Obsidian /
-  Copilot Chat on their own machine, over stdio. Running a 24/7 HTTP MCP
-  service on the VM that nothing calls is pure operational overhead. A remote
-  MCP HTTP client reaching the VM would cross the network, which the trust model
-  (§1) forbids without auth — so stdio (a local-trust transport) is the
-  Stage-1 answer.
-- **`pg_dump` cron is non-negotiable**: the DB is the source of truth and
-  Sources are re-ingestable but the knowledge graph (entities, relations, wiki
-  pages, merge logs) is not trivially reconstructable. A daily logical backup is
-  the cheapest thing that counts as "best practice" and covers the most likely
-  failure mode (host death). WAL archiving / point-in-time recovery is Stage-2+.
-- **Manual-gate protects a data-writing backend**: an LLM-pipeline backend that
-  ingests documents and writes to a knowledge graph is exactly the kind of system
-  you don't want to auto-deploy-then-discover-a-migration-broke-the-graph
-  (ADR-0005: a failed deploy mid-migration could strand jobs; ADR-0010: a bad
-  deploy could publish junk wiki pages). Manual-gate-on-`main` is the
-  best-practice posture for a data-writing backend in early life.
+- **Compose-on-VM is the smallest honest best-practice deployment** for a
+  headless backend: it exercises the full CD cycle (build → scan → push →
+  deploy → migrate) without the overhead of a Helm chart, which is genuinely
+  hard to author correctly and isn't justified at this scale yet.
+- **Network isolation, not app-layer auth, is the correct pattern for a
+  headless backend behind a trust boundary** (ADR-0013 §3). This is a stable
+  architectural position, not a stand-in for auth that "should" exist once a
+  particular client materializes.
+- **Additive-safe**: every Stage-2 move — Helm chart, edge API key, staging
+  overlay, SeaweedFS, MCP HTTP service, managed Postgres, observability stack
+  — lands as a new file or service block. No Stage-2 move requires touching
+  Stage-1 code or reversing a Stage-1 decision.
+- **Forward-only migrations + pinned SHA tags** close the gap between "we have
+  a rollback plan" and "the rollback plan actually works." A data-writing
+  backend that ingests documents into a knowledge graph (ADR-0005, ADR-0010)
+  cannot safely assume old code against a new schema; the honest policy is
+  fix-forward, stated explicitly rather than implied.
+- **Verified backups over unverified backups**: a cron job that writes a file
+  no one has ever restored is not a backup strategy, it's a hope. The
+  restore-list check and monthly drill are cheap and are what make the daily
+  `pg_dump` claim credible.
+- **Restart policy, resource limits, and log rotation** are the difference
+  between "a container runs" and "a system is operated." All three are
+  near-zero cost and directly address the most likely Stage-1 failure modes:
+  a crashed process nobody notices, one runaway job starving the whole VM, and
+  an unbounded log file filling the disk.
+- **Command-restricted deploy key** bounds the blast radius of a leaked CI
+  secret to exactly the one operation CI needs to perform.
+- **Manual-gate protects a data-writing backend**: auto-deploying a system
+  that writes to a knowledge graph risks stranding jobs mid-migration
+  (ADR-0005) or publishing junk wiki pages (ADR-0010) with no human in the
+  loop. Manual-gate-on-`main` is the appropriate posture at this stage.
 
 ## Consequences
 
-- New files in `deploy/`: `docker-compose.prod.yml`, `Caddyfile`,
-  `.env.example`, `README.md`. The dev `docker-compose.yml` at repo root is
-  untouched.
-- New script `scripts/backup.sh` + a cron entry on the VM.
-- `.github/workflows/ci.yml` gains `push-images` and `deploy` jobs; the
-  deferred `push-images` block (currently a commented-out placeholder) is
-  replaced.
-- `rag_wiki/settings.py` gains a `model_validator` that hardens MCP HTTP to
-  loopback-only. This is a breaking change for anyone who has set
-  `MCP_HOST=0.0.0.0` — but no such deployment exists today (the default is
-  `127.0.0.1`), and the validator emits a clear error message.
-- No changes to: `Dockerfile` (already production-shaped), `main.py`, any route
-  code, ADRs 0004/0013/0016 (this ADR concretizes them, not supersedes them).
-- Stage-2 moves (Helm chart, shared API key, auto-deploy, SeaweedFS, MCP HTTP
-  service, managed Postgres, observability stack, WAL backups) are all
-  additive — each lands as a new file or a new service block without modifying
-  Stage-1 artifacts.
-- If multi-tenant SaaS becomes a goal, it would require a new ADR revisiting
-  the schema (per ADR-0004) — deliberately deferred and not enabled by this
-  topology.
+- New files in `deploy/`: `docker-compose.prod.yml` (with restart policies,
+  resource limits, log rotation), `Caddyfile`, `.env.example`, `README.md`.
+  The dev `docker-compose.yml` at repo root is untouched.
+- New script `scripts/backup.sh` (with post-dump validation) + a cron entry on
+  the VM, plus a documented monthly restore-drill procedure.
+- `.github/workflows/ci.yml` gains `push-images` and `deploy` jobs; `deploy`
+  always pins `IMAGE_TAG` to a specific `sha-<short>`, never `:latest`.
+- `rag_wiki/settings.py` gains a `model_validator` hardening MCP HTTP to
+  loopback-only. Breaking only for a `MCP_HOST=0.0.0.0` setup, which doesn't
+  exist today (default is `127.0.0.1`); the validator emits a clear error.
+- A documented, enforced policy: no schema-rollback recovery path. A bad
+  migration is corrected with a new forward migration.
+- No changes to: `Dockerfile`, `main.py`, route code, or ADRs 0004/0013/0016
+  (this ADR concretizes them, not supersedes them).
+- Stage-2 moves (Helm chart, edge-level API key, auto-deploy, SeaweedFS, MCP
+  HTTP service, managed Postgres, observability stack, WAL backups) remain
+  fully additive.
+- If a client outside the operator's trust boundary becomes a requirement
+  (public endpoint, third-party consumer, multi-tenant SaaS), that triggers a
+  new ADR revisiting both the trust model and the schema (per ADR-0004) —
+  deliberately out of scope here.
