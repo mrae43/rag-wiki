@@ -443,20 +443,45 @@ and markdown. The system runs fully without MinerU.
 
 ## Deployment
 
-### Small team / single instance
+### Stage-1: Compose-on-VM (current)
 
-Docker Compose is the recommended path. Everything runs in one `docker-compose.yml`:
-API, worker, and Postgres. Suitable for a team of up to ~20 with moderate
-ingestion volume.
+The Stage-1 deployment (ADR-0017) targets a single trusted operator running the
+system on their own infrastructure. The Backend ships as a headless service with
+no authentication — protection comes from network isolation, not app-layer tokens.
 
-### Production / enterprise
+- **Topology**: single VM running `db` (PostgreSQL 16 + pgvector), `api` (FastAPI),
+  `worker` (background job processor), and `caddy` (Caddy TLS reverse proxy) via
+  `docker compose`. Image pulled from GHCR, never built on the VM.
+- **Network**: zero public-facing ports. All access over Tailscale using its
+  internal CA for TLS. The only entities reaching the Backend are systems the
+  operator controls on the same tailnet.
+- **CI/CD**: manual-gated GitHub Actions. `push-images` runs on `main`; `deploy` is
+  `workflow_dispatch` only, always pinned to a specific `sha-<short>` tag.
+  Migrations are forward-only — rollback via image revert is unsupported.
+- **MCP**: stdio-only in production. The operator runs `rag-wiki mcp serve` locally
+  pointing `MCP_API_URL` at the deployed API over Tailscale. No MCP service in
+  the prod compose stack.
+- **Ops floor**: per-container resource limits + log rotation, `GET /health` for
+  Compose health checks and Caddy upstream gating, daily validated `pg_dump`
+  backups (7-day retention, monthly restore-to-scratch drill), structured
+  structlog to stdout.
+- **Secrets**: flat `.env` on the VM (gitignored, manually maintained). CI secrets
+  hold only `GHCR_TOKEN`, `DEPLOY_SSH_KEY` (command-restricted), and `DEPLOY_HOST`.
 
-A Helm chart is _planned_ for Kubernetes deployment with:
+See `deploy/README.md` for the full runbook, and `docs/adr/0017-stage-1-deployment-topology.md`
+for the architectural rationale.
 
-- Multi-replica API and worker deployments
-- External managed Postgres (RDS, Cloud SQL, Supabase, etc.)
-- Config via Kubernetes Secrets / environment injection
-- Horizontal scaling of workers for high ingestion throughput
+### Stage-2 (planned — additive, no Stage-1 rewrite)
+
+Enhancements that land alongside Stage-1 without rewriting anything:
+
+- Helm chart for Kubernetes (multi-replica API/worker, managed Postgres)
+- Edge-level shared API key
+- Auto-deploy on `main` (once manual gate is no longer justified)
+- S3-compatible storage (SeaweedFS / MinIO)
+- MCP HTTP service in the compose stack (contingent on client demand + auth revisit)
+- Observability stack (metrics, dashboard, Loki/Grafana)
+- WAL archiving / point-in-time recovery
 
 ---
 
@@ -475,7 +500,7 @@ single source of truth for the package layout and test mirroring conventions.
 | ✅ Done    | Coding standards, tech stack, agent guidance                                                       |
 | ✅ Done    | Database schema + Alembic migrations                                                               |
 | ✅ Done    | Lightweight parsing pipeline                                                                       |
-| ✅ Done    | Docker Compose stack                                                                               |
+| ✅ Done    | Docker Compose dev stack                                                                           |
 | ✅ Done    | LLM provider abstraction + OpenAI implementation (Anthropic is a stub)                             |
 | ✅ Done    | Entity/relation extraction + real-time resolution                                                  |
 | ✅ Done    | Background job worker                                                                              |
@@ -485,13 +510,14 @@ single source of truth for the package layout and test mirroring conventions.
 | ✅ Done    | FastAPI endpoints                                                                                  |
 | ✅ Done    | ADR-0019: OKF export format design                                                                |
 | ✅ Done    | ADR-0020: Graph analysis layer design (community detection, PageRank, cohesion, surprising connections) |
-| 🔲 Planned | Auth / RBAC                                                                                        |
-| 🔲 Planned | Observability (structured logging, metrics)                                                        |
+| ✅ Done    | Stage-1 deployment topology — Compose-on-VM, Tailscale, Caddy TLS, CI/CD, backups (ADR-0017)      |
 | 🔲 Planned | Lint operation (periodic graph health check)                                                       |
 | 🔲 Planned | OKF export CLI implementation (ADR-0019)                                                           |
 | 🔲 Planned | Graph analysis implementation + API endpoints (ADR-0020)                                           |
 | 🔲 Planned | Optional MinerU multimodal path                                                                    |
-| 🔲 Planned | Helm chart                                                                                         |
+| 🔲 Planned | Interface App (separate project, deferred — ADR-0021)                                              |
+| 🔲 Planned | Auth / RBAC (owned by Interface App)                                                               |
+| 🔲 Planned | Stage-2 enhancements (Helm chart, auto-deploy, S3 storage, observability stack, etc.)              |
 | 🔲 Planned | Ingestion review queue (pending_review workflow)                                                   |
 | 🔲 Planned | Celery/RQ + Redis job queue migration path                                                         |
 

@@ -321,10 +321,19 @@ system-wide.
 
 ---
 
-## Not yet decided
+## Deferred (decided — do not implement)
 
-These areas are flagged in ADRs but have no implementation decision yet.
-Do not invent a solution for either — raise it as a question first.
+These areas have explicit decisions recorded in ADRs, but the implementation is
+**deferred** to a later phase or a separate project. Do not build any of them
+unilaterally — the ADR is the constraint, not a gap.
 
-- Auth/RBAC implementation (flagged in ADR-0004)
-- Observability stack — structured logging config, metrics (flagged in ADR-0004/0008/0010)
+- **Auth/RBAC** — explicitly deferred to the Interface App (ADR-0021). The
+  Backend ships unauthenticated behind a network-isolation trust boundary
+  (ADR-0017). No `created_by` columns, no `users` table, no `X-User-Id` header.
+- **Interface App** — a separate project (TypeScript + Vue/React, different repo).
+  This repo builds the headless Backend only. No frontend code, UI templates, or
+  JS/TS ever enters this repo. (ADR-0021)
+- **Observability stack** (metrics, dashboard, Loki/Grafana) — explicitly
+  deferred to Stage-2 (ADR-0017 §7). Current ops floor is structlog to stdout
+  + Docker log rotation + `GET /health`. Do not add Prometheus metrics,
+  OpenTelemetry tracing, or a telemetry export path.
