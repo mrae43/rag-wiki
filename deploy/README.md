@@ -169,7 +169,27 @@ GitHub → **Actions → CI → Run workflow** (on `main`). Pick the `deploy`
 workflow. The `deploy` job runs after `push-images` succeeds and prints the
 remote `compose up` output into the workflow log.
 
-To instead deploy by hand on the VM:
+The `deploy` job **automatically pins `IMAGE_TAG`** to the exact `sha-<short>`
+it just built and scanned, before `docker compose pull` (ADR-0017 §4 / PRD-005
+Gap #5). One SSH step runs
+`python3 scripts/pin_image_tag.py deploy/.env sha-<short>`, which atomically
+rewrites the `IMAGE_TAG=` line in the VM's `.env` and leaves every other
+line byte-identical. The pinner **refuses to run** if `IMAGE_TAG=` is absent
+from `.env` — so an operator who copies `.env.example` to `.env` but forgets
+to set `IMAGE_TAG` gets a clear error naming the missing key and the file
+path, rather than a silently-invented line. The `workflow_dispatch` UI is
+unchanged (still a one-click manual gate).
+
+Rollback is unchanged: a one-line `.env` edit (PRD-005 User Story 16):
+
+```bash
+cd /opt/rag-wiki
+editor deploy/.env        # set IMAGE_TAG=sha-<previous-good-sha>
+docker compose -f deploy/docker-compose.prod.yml pull
+docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
+```
+
+To instead deploy by hand on the VM (skipping the pinner):
 
 ```bash
 cd /opt/rag-wiki
