@@ -240,12 +240,81 @@ jobs:
           DATABASE_URL: ${{ env.DATABASE_URL }}
 
   # ----------------------------------------------------------------------- #
+  # backup-validation — verify pg_dump -Fc archives with pg_restore --list.  #
+  # Parallel to migrations; does not need the project test suite.            #
+  # ----------------------------------------------------------------------- #
+  backup-validation:
+    name: Validate backup dumps
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: rag_wiki
+          POSTGRES_PASSWORD: rag_wiki
+          POSTGRES_DB: rag_wiki_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install dependencies
+        run: uv sync --extra dev --frozen
+      - name: Seed core tables and generate known-good dump
+        run: |
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE sources (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE chunks (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE entities (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE relations (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE wiki_pages (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE jobs (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki pg_dump -U rag_wiki -Fc ragwiki_test -h localhost > /tmp/good.dump
+          pg_restore --list /tmp/good.dump >/dev/null
+      - name: Validate known-good dump exits 0
+        run: |
+          uv run python scripts/dump_validator.py /tmp/good.dump
+      - name: Validate zero-byte dump exits non-zero with reason
+        run: |
+          : > /tmp/empty.dump
+          if uv run python scripts/dump_validator.py /tmp/empty.dump; then
+            echo "ERROR: empty dump should have failed validation" >&2
+            exit 1
+          fi
+      - name: Validate corrupt dump exits non-zero with reason
+        run: |
+          cp tests/scripts/fixtures/corrupt.dump /tmp/corrupt.dump
+          if uv run python scripts/dump_validator.py /tmp/corrupt.dump; then
+            echo "ERROR: corrupt dump should have failed validation" >&2
+            exit 1
+          fi
+      - name: Run pytest backup-validator tests
+        run: uv run pytest tests/scripts/test_dump_validator.py -v
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+
+  # ----------------------------------------------------------------------- #
   # build-images — single shared image, buildx + GHA layer cache.             #
-  # Needs test + migrations (the heavy gates) before paying for a build.     #
+  # Needs test + migrations + backup-validation (the heavy gates) before     #
+  # paying for a build.                                                       #
   # ----------------------------------------------------------------------- #
   build-images:
     name: Build image
-    needs: [test, migrations]
+    needs: [test, migrations, backup-validation]
     runs-on: ubuntu-latest
     permissions:
       contents: read
