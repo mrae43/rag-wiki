@@ -169,7 +169,27 @@ GitHub → **Actions → CI → Run workflow** (on `main`). Pick the `deploy`
 workflow. The `deploy` job runs after `push-images` succeeds and prints the
 remote `compose up` output into the workflow log.
 
-To instead deploy by hand on the VM:
+The `deploy` job **automatically pins `IMAGE_TAG`** to the exact `sha-<short>`
+it just built and scanned, before `docker compose pull` (ADR-0017 §4 / PRD-005
+Gap #5). One SSH step runs
+`python3 scripts/pin_image_tag.py deploy/.env sha-<short>`, which atomically
+rewrites the `IMAGE_TAG=` line in the VM's `.env` and leaves every other
+line byte-identical. The pinner **refuses to run** if `IMAGE_TAG=` is absent
+from `.env` — so an operator who copies `.env.example` to `.env` but forgets
+to set `IMAGE_TAG` gets a clear error naming the missing key and the file
+path, rather than a silently-invented line. The `workflow_dispatch` UI is
+unchanged (still a one-click manual gate).
+
+Rollback is unchanged: a one-line `.env` edit (PRD-005 User Story 16):
+
+```bash
+cd /opt/rag-wiki
+editor deploy/.env        # set IMAGE_TAG=sha-<previous-good-sha>
+docker compose -f deploy/docker-compose.prod.yml pull
+docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
+```
+
+To instead deploy by hand on the VM (skipping the pinner):
 
 ```bash
 cd /opt/rag-wiki
@@ -378,3 +398,46 @@ for the full list. Highlights:
 
 When proposing a Stage-2 change, start from the rejection rationale in
 ADR-0017 — each rejected alternative is documented there.
+
+---
+
+## 10. Resource limits & log rotation
+
+ADR-0017 §2 requires every prod container to carry an explicit `mem_limit`/`cpus`
+bound and a capped `json-file` log driver. Both are set in
+`docker-compose.prod.yml` and asserted by `tests/deploy/test_compose_config.py`
+(presence + shape, not the chosen numbers).
+
+### 10.1 Baseline (4 GB VM)
+
+| service | `mem_limit` | `cpus` | rationale |
+|---|---|---|---|
+| `db` | `1400m` | `1.0` | Largest budget — Postgres `shared_buffers`/`work_mem` need it most |
+| `api` | `700m` | `0.5` | uvicorn working set + request handling |
+| `worker` | `500m` | `0.5` | Capped below `db` and `api` — a runaway ingest degrades throughput, not the db/api |
+| `caddy` | `64m` | `0.25` | Small fixed budget — reverse proxy stays responsive under load |
+
+Sum ≈ 2.66 GB < 4 GB, leaving ~1.4 GB for the OS, the Docker daemon, and
+headroom.
+
+### 10.2 2 GB VM variant
+
+If the VM is 2 GB, halve the budgets (tight): `db 768m / api 384m / worker
+256m / caddy 48m`. Note that `worker 256m` is tight for large-PDF parsing —
+watch the first big ingest.
+
+### 10.3 Log rotation
+
+Every service uses `driver: json-file` with `max-size: "10m"` and
+`max-file: "3"` (~30 MB per service worst case), so a chatty container cannot
+silently fill the VM's disk. No log shipping in Stage-1 (Stage-2 adds a
+`logging` aggregation service additively).
+
+### 10.4 Resizing
+
+The numbers are baked into `docker-compose.prod.yml` (not env-interpolated —
+Compose has no per-resource env override that's cleaner than editing the
+file). To resize: edit the `mem_limit`/`cpus` values in
+`deploy/docker-compose.prod.yml`, re-run `docker compose up -d`. The
+`.env.example` `## Resource limits` block records the same baseline for an
+SME customer lifting the deployment (PRD-005 User Story 25).
