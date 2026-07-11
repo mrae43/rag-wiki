@@ -34,6 +34,16 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # ADR-0017 §2 — explicit per-service resource bounds. db gets the largest
+    # memory budget (shared_buffers/work_mem need it most). Operator-resizable;
+    # see deploy/.env.example `## Resource limits` for rationale + 2 GB variant.
+    mem_limit: 1400m
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
     image: ghcr.io/${GHCR_OWNER}/rag-wiki:${IMAGE_TAG}
@@ -63,6 +73,14 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # ADR-0017 §2 — working-set budget for uvicorn + request handling.
+    mem_limit: 700m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   worker:
     image: ghcr.io/${GHCR_OWNER}/rag-wiki:${IMAGE_TAG}
@@ -80,6 +98,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # ADR-0017 §2 — capped below db and api so a runaway ingest degrades
+    # throughput rather than starving the database or the API.
+    mem_limit: 500m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   caddy:
     image: caddy:2
@@ -94,6 +121,14 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    # ADR-0017 §2 — small fixed budget so the reverse proxy stays responsive.
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
