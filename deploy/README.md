@@ -220,11 +220,17 @@ production.
 
 ## 5. Backups
 
-A daily logical `pg_dump` is the Stage-1 backup (ADR-0017 §7). It runs on the
-VM **host** (not in a container) so a crashed `db` container can't prevent
-backups.
+A daily logical `pg_dump -Fc` is the Stage-1 backup (ADR-0017 §7 / PRD-005
+Gap #3). It runs on the VM **host** (not in a container) so a crashed `db`
+container can't prevent backups. Every dump is validated with
+`pg_restore --list` before the script exits 0; a zero-byte or structurally
+corrupt dump fails loudly and is left in place for inspection.
 
 ### 5.1 Install the cron
+
+The backup validator is a small Python helper invoked with `uv run python`
+inside the repo, so `uv` must be available on the VM host (see
+[uv installation](https://docs.astral.sh/uv/getting-started/installation/)):
 
 ```bash
 sudo mkdir -p /backups
@@ -254,14 +260,24 @@ Override in the crontab line if needed, e.g.
 ```bash
 COMPOSE_FILE=deploy/docker-compose.prod.yml BACKUP_DIR=/backups \
   /opt/rag-wiki/scripts/backup.sh
-ls -lh /backups                  # non-empty .sql.gz
-gunzip -c /backups/ragwiki-*.sql.gz | head   # valid PostgreSQL dump
+ls -lh /backups                  # non-empty .dump
+pg_restore --list /backups/ragwiki-*.dump   # valid custom-format archive
 ```
 
-Retention is 7 days via `find /backups -name 'ragwiki-*.sql.gz' -mtime +7 -delete`.
+Retention is 7 days via `find /backups -name 'ragwiki-*.dump' -mtime +7 -delete`.
+Legacy `.sql.gz` files from before PRD-005 are still pruned under the same rule
+and age out naturally; they remain restorable with `gunzip | psql` if needed.
 WAL archiving / point-in-time recovery is Stage-2+.
 
 ### 5.4 Restore (test on a throwaway VM, not in prod)
+
+```bash
+docker cp /backups/ragwiki-<date>.dump "$(docker compose -f deploy/docker-compose.prod.yml ps -q db)":/tmp/
+docker compose -f deploy/docker-compose.prod.yml exec -T db \
+  pg_restore -U ragwiki -d ragwiki /tmp/ragwiki-<date>.dump
+```
+
+For a legacy `.sql.gz` backup, restore with `gunzip | psql`:
 
 ```bash
 docker cp /backups/ragwiki-<date>.sql.gz "$(docker compose -f deploy/docker-compose.prod.yml ps -q db)":/tmp/
