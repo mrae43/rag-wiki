@@ -378,3 +378,46 @@ for the full list. Highlights:
 
 When proposing a Stage-2 change, start from the rejection rationale in
 ADR-0017 — each rejected alternative is documented there.
+
+---
+
+## 10. Resource limits & log rotation
+
+ADR-0017 §2 requires every prod container to carry an explicit `mem_limit`/`cpus`
+bound and a capped `json-file` log driver. Both are set in
+`docker-compose.prod.yml` and asserted by `tests/deploy/test_compose_config.py`
+(presence + shape, not the chosen numbers).
+
+### 10.1 Baseline (4 GB VM)
+
+| service | `mem_limit` | `cpus` | rationale |
+|---|---|---|---|
+| `db` | `1400m` | `1.0` | Largest budget — Postgres `shared_buffers`/`work_mem` need it most |
+| `api` | `700m` | `0.5` | uvicorn working set + request handling |
+| `worker` | `500m` | `0.5` | Capped below `db` and `api` — a runaway ingest degrades throughput, not the db/api |
+| `caddy` | `64m` | `0.25` | Small fixed budget — reverse proxy stays responsive under load |
+
+Sum ≈ 2.66 GB < 4 GB, leaving ~1.4 GB for the OS, the Docker daemon, and
+headroom.
+
+### 10.2 2 GB VM variant
+
+If the VM is 2 GB, halve the budgets (tight): `db 768m / api 384m / worker
+256m / caddy 48m`. Note that `worker 256m` is tight for large-PDF parsing —
+watch the first big ingest.
+
+### 10.3 Log rotation
+
+Every service uses `driver: json-file` with `max-size: "10m"` and
+`max-file: "3"` (~30 MB per service worst case), so a chatty container cannot
+silently fill the VM's disk. No log shipping in Stage-1 (Stage-2 adds a
+`logging` aggregation service additively).
+
+### 10.4 Resizing
+
+The numbers are baked into `docker-compose.prod.yml` (not env-interpolated —
+Compose has no per-resource env override that's cleaner than editing the
+file). To resize: edit the `mem_limit`/`cpus` values in
+`deploy/docker-compose.prod.yml`, re-run `docker compose up -d`. The
+`.env.example` `## Resource limits` block records the same baseline for an
+SME customer lifting the deployment (PRD-005 User Story 25).
