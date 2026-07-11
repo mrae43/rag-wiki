@@ -342,6 +342,13 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             cd ${{ secrets.DEPLOY_PATH }}
+            # ADR-0017 §4 / PRD-005 Gap #5 — pin IMAGE_TAG to the exact SHA CI
+            # just built and scanned, atomically and idempotently, before
+            # `compose pull`. Refuses to run if `IMAGE_TAG=` is absent in .env
+            # (protects operators who forgot to set it). Rollback stays a
+            # one-line .env edit. The pinner is stdlib-only, so `python3` runs
+            # it on the VM without needing uv or the project venv installed.
+            python3 scripts/pin_image_tag.py deploy/.env sha-${GITHUB_SHA::7}
             docker compose -f deploy/docker-compose.prod.yml pull
             docker compose -f deploy/docker-compose.prod.yml up -d --remove-orphans
 
