@@ -37,7 +37,10 @@ ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Install runtime system deps for pymupdf and unstructured, then clean apt caches.
+# Also run upgrade to pick up security patches (libcurl4, libgif7, etc.) that
+# may not yet be baked into the pinned base image SHA.
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends \
     libmupdf-dev \
     poppler-utils \
