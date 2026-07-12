@@ -277,13 +277,13 @@ jobs:
         run: uv sync --extra dev --frozen
       - name: Seed core tables and generate known-good dump
         run: |
-          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE sources (id serial PRIMARY KEY);"
-          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE chunks (id serial PRIMARY KEY);"
-          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE entities (id serial PRIMARY KEY);"
-          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE relations (id serial PRIMARY KEY);"
-          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE wiki_pages (id serial PRIMARY KEY);"
-          PGPASSWORD=rag_wiki psql -U rag_wiki -d ragwiki_test -h localhost -c "CREATE TABLE jobs (id serial PRIMARY KEY);"
-          PGPASSWORD=rag_wiki pg_dump -U rag_wiki -Fc ragwiki_test -h localhost > /tmp/good.dump
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d rag_wiki_test -h localhost -c "CREATE TABLE sources (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d rag_wiki_test -h localhost -c "CREATE TABLE chunks (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d rag_wiki_test -h localhost -c "CREATE TABLE entities (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d rag_wiki_test -h localhost -c "CREATE TABLE relations (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d rag_wiki_test -h localhost -c "CREATE TABLE wiki_pages (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki psql -U rag_wiki -d rag_wiki_test -h localhost -c "CREATE TABLE jobs (id serial PRIMARY KEY);"
+          PGPASSWORD=rag_wiki pg_dump -U rag_wiki -Fc rag_wiki_test -h localhost > /tmp/good.dump
           pg_restore --list /tmp/good.dump >/dev/null
       - name: Validate known-good dump exits 0
         run: |
