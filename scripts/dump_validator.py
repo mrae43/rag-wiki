@@ -121,6 +121,14 @@ def _find_pg_restore() -> str | None:
 
 
 def _main(argv: list[str]) -> int:
+    structlog.configure(
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.dev.ConsoleRenderer(colors=False),
+        ],
+        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+        cache_logger_on_first_use=True,
+    )
     if len(argv) != 2:
         print(f"usage: {argv[0]} <dump_file>", file=sys.stderr)
         return 2
