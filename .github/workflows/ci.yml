@@ -306,6 +306,20 @@ jobs:
         run: uv run pytest tests/scripts/test_dump_validator.py -v
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
+      - name: Restore drill — known-good dump (must pass)
+        run: |
+          scripts/restore_drill.sh \
+            /tmp/good.dump \
+            postgresql://rag_wiki:rag_wiki@localhost:5432/ragwiki_drill_good
+      - name: Restore drill — corrupt dump (must fail)
+        run: |
+          if scripts/restore_drill.sh \
+            tests/scripts/fixtures/corrupt.dump \
+            postgresql://rag_wiki:rag_wiki@localhost:5432/ragwiki_drill_corrupt; then
+            echo "ERROR: restore drill should have failed with corrupt dump" >&2
+            exit 1
+          fi
+          echo "Restore drill correctly rejected corrupt dump"
 
   # ----------------------------------------------------------------------- #
   # build-images — single shared image, buildx + GHA layer cache.             #

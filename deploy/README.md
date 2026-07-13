@@ -287,20 +287,79 @@ docker compose -f deploy/docker-compose.prod.yml exec -T db \
 
 ---
 
-## 6. MCP from the operator's laptop
+## 6. Monthly restore drill
+
+A monthly verification that a backup can actually be restored (PRD-005 Gap #4 /
+ADR-0017 §7). The drill restores a chosen custom-format dump into a **scratch**
+Postgres database (never the prod `db` service), confirms the six core tables
+are present (`sources`, `chunks`, `entities`, `relations`, `wiki_pages`,
+`jobs`), then drops the scratch DB. If any step fails the script exits non-zero
+and the scratch DB is still dropped via `trap`.
+
+### 6.1 One-command drill
+
+```bash
+COMPOSE_FILE=deploy/docker-compose.prod.yml \
+  scripts/restore_drill.sh \
+    /backups/ragwiki-2026-07-13.dump \
+    postgresql://ragwiki:${POSTGRES_PASSWORD}@localhost:5432/ragwiki_drill_20260713
+```
+
+The script parses the connection URI to set `PGUSER` / `PGPASSWORD` / `PGHOST` /
+`PGPORT` for `createdb`/`dropdb` (which do not accept URIs) and passes the full
+URI to `pg_restore` and `psql`. The only requirement is that the operator has
+network access to the VM's Postgres port — on a single-VM deploy this is always
+`localhost:5432`.
+
+### 6.2 Scratch-DB naming convention
+
+Use the pattern `ragwiki_drill_<YYYYMMDD>`. The script **refuses** to restore
+into a database named `ragwiki` (the prod default) — this is a defensive guard
+against running the drill against the production database. Change the guard
+name via the `PROD_DB_NAME` environment variable if your prod DB has a
+different name.
+
+### 6.3 Pass/fail criteria
+
+| Outcome | Exit code | What happened |
+|---|---|---|
+| **PASS** | `0` | Dump validated; scratch DB created; `pg_restore` succeeded; all six core tables present; scratch DB dropped. |
+| **FAIL** | `1` | Any failure (corrupt dump, restore error, missing table, etc.). Reason printed to stderr. Scratch DB dropped. |
+| **Usage error** | `2` | Wrong arguments (missing `<dump_file>` or `<scratch_db_url>`). |
+
+In all cases the scratch database is guaranteed to be removed — the `trap` on
+`EXIT` calls `dropdb` regardless of the exit path (User Story 26).
+
+### 6.4 Running from CI
+
+The `backup-validation` CI job runs the drill automatically against a known-good
+dump and a corrupt dump to lock the pass/fail semantics (User Story 21). See
+`.github/workflows/ci.yml`.
+
+### 6.5 Scheduling
+
+The drill is **manual** in Stage-1 — add a monthly calendar reminder, pick the
+latest dump from `/backups`, and run the one-command invocation above.
+Scheduled automation (e.g. a cron or GitHub Scheduled Workflow) is deferred to
+Stage-2 (ADR-0017 §7 notes that backup verification must be a verified
+procedure before any automation; the manual repetition builds that confidence).
+
+---
+
+## 7. MCP from the operator's laptop
 
 No MCP service runs in prod compose (ADR-0017 §6) — the operator runs the
 MCP server locally over **stdio**, pointing at the deployed API over
 Tailscale. Obsidian / Claude Desktop / Copilot Chat spawn it as a stdio
 process.
 
-### 6.1 Install the CLI on the laptop
+### 7.1 Install the CLI on the laptop
 
 ```bash
 uv tool install rag-wiki          # or: pipx install rag-wiki
 ```
 
-### 6.2 Run it
+### 7.2 Run it
 
 Either set the API URL inline, or via env var (no prefix — see
 `rag_wiki/settings.py`):
@@ -318,7 +377,7 @@ MCP_API_URL=https://rag-wiki.<tailnet> rag-wiki mcp serve
 (`127.0.0.1` / `::1` / `localhost`); the `Settings` `model_validator`
 rejects any other value (ADR-0017 §6 / PR-1).
 
-### 6.3 Wire it into your MCP client
+### 7.3 Wire it into your MCP client
 
 For Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`
 on macOS), add:
@@ -340,7 +399,7 @@ refuse the cert.
 
 ---
 
-## 7. Observability
+## 8. Observability
 
 Stage-1 ops floor is deliberately minimal (ADR-0017 §7): structured logs to
 stdout, captured per-container by Docker. No Loki/Grafana/Prometheus.
@@ -359,7 +418,7 @@ container is restarted by the compose healthcheck (`GET /health`, a `SELECT 1`).
 
 ---
 
-## 8. Branch protection (repo-admin)
+## 9. Branch protection (repo-admin)
 
 Branch protection is codified in-repo for transparency and auditability
 (ADR-0018). The configuration is in two files:
@@ -394,7 +453,7 @@ permissions default = read, push-protection verify). Use `SKIP_TAG=1` or
 
 ---
 
-## 9. Stage-2 (additive — no Stage-1 rewrite)
+## 10. Stage-2 (additive — no Stage-1 rewrite)
 
 Every Stage-2 enhancement lands as a new file or service block; none of the
 Stage-1 artifacts in this directory are rewritten. See ADR-0017 §Consequences
@@ -417,7 +476,7 @@ ADR-0017 — each rejected alternative is documented there.
 
 ---
 
-## 10. Resource limits & log rotation
+## 11. Resource limits & log rotation
 
 ADR-0017 §2 requires every prod container to carry an explicit `mem_limit`/`cpus`
 bound and a capped `json-file` log driver. Both are set in
