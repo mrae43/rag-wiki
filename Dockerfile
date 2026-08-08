@@ -3,7 +3,7 @@
 # -----------------------------------------------------------------------------
 # Builder stage — resolve dependencies into an isolated virtual environment.
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b AS builder
+FROM python:3.13-slim-bookworm@sha256:67a1e1f215ccda113cfc024e8639049257e88f273898f595b61476d128d387e8 AS builder
 
 # Pin uv to a known-good release for reproducible builds.
 COPY --from=ghcr.io/astral-sh/uv:0.11.24 /uv /bin/uv
@@ -22,7 +22,7 @@ RUN uv sync --frozen --no-cache
 # -----------------------------------------------------------------------------
 # Runtime stage — minimal image with only runtime system deps and the venv.
 # -----------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm@sha256:8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b
+FROM python:3.13-slim-bookworm@sha256:67a1e1f215ccda113cfc024e8639049257e88f273898f595b61476d128d387e8
 
 # Pin uv to the same release used at build time so entrypoints can use `uv run`.
 COPY --from=ghcr.io/astral-sh/uv:0.11.24 /uv /bin/uv
